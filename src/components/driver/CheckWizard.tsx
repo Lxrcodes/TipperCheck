@@ -583,18 +583,6 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
               {selectedVehicle?.registration}
             </div>
 
-            <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg mb-6">
-              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-amber-800">
-                <p className="font-medium mb-1">Before you start:</p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li>Walk around the vehicle</li>
-                  <li>Engine should be off and keys removed</li>
-                  <li>Apply parking brake</li>
-                </ul>
-              </div>
-            </div>
-
             <div className="flex items-center gap-2 text-sm text-slate-500 mb-2">
               <MapPin className="w-4 h-4" />
               <span>Location will be recorded</span>
@@ -727,6 +715,12 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
 
   // Category Check
   if (step === 'category' && currentCategory) {
+    // Check if all items in current category are completed
+    const categoryItems = currentCategory.items;
+    const completedItems = categoryItems.filter((item) => results.has(item.id));
+    const allItemsCompleted = completedItems.length === categoryItems.length;
+    const remainingCount = categoryItems.length - completedItems.length;
+
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col">
         {/* Timer Header */}
@@ -777,6 +771,11 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
 
         {/* Navigation */}
         <div className="bg-white border-t border-slate-200 p-4">
+          {!allItemsCompleted && (
+            <p className="text-sm text-amber-600 text-center mb-3">
+              {remainingCount} item{remainingCount !== 1 ? 's' : ''} remaining
+            </p>
+          )}
           <div className="flex gap-3">
             <button
               onClick={handlePrevCategory}
@@ -787,7 +786,8 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
             </button>
             <button
               onClick={handleNextCategory}
-              className="flex-1 py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors flex items-center justify-center gap-2"
+              disabled={!allItemsCompleted}
+              className="flex-1 py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
             >
               {currentCategoryIndex === totalCategories - 1 ? 'Review' : 'Next'}
               <ChevronRight className="w-5 h-5" />
