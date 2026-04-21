@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   XCircle,
   HelpCircle,
+  Clock,
 } from 'lucide-react';
 import {
   savePendingCheck,
@@ -42,6 +43,7 @@ import type {
 type WizardStep =
   | 'select_vehicle'
   | 'intro'
+  | 'reg_photo'
   | 'category'
   | 'summary'
   | 'signature'
@@ -76,8 +78,11 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
   const [activeDefectItem, setActiveDefectItem] = useState<CheckItem | null>(null);
   const [defectNote, setDefectNote] = useState('');
   const [defectPhotos, setDefectPhotos] = useState<string[]>([]);
+  const [regPhoto, setRegPhoto] = useState<string | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const regPhotoInputRef = useRef<HTMLInputElement>(null);
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Load cached data
@@ -136,6 +141,26 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
     ? ((currentCategoryIndex + 1) / totalCategories) * 100
     : 0;
 
+  // Timer effect - counts up from when check started
+  useEffect(() => {
+    if (!startedAt) return;
+
+    const interval = setInterval(() => {
+      const now = new Date();
+      const diff = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
+      setElapsedSeconds(diff);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [startedAt]);
+
+  // Format elapsed time as MM:SS
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
   // ============================================================================
   // Handlers
   // ============================================================================
@@ -171,6 +196,21 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
   const handleStartCheck = () => {
     setStartedAt(new Date());
     getCurrentLocation();
+    setStep('reg_photo');
+  };
+
+  const handleRegPhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setRegPhoto(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRegPhotoContinue = () => {
     setStep('category');
   };
 
@@ -265,6 +305,9 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
   const handlePrevCategory = () => {
     if (currentCategoryIndex > 0) {
       setCurrentCategoryIndex((prev) => prev - 1);
+    } else {
+      // At first category, go back to reg photo step
+      setStep('reg_photo');
     }
   };
 
@@ -350,6 +393,7 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
         results: Array.from(results.values()),
         overall_status: overallStatus,
         signature_data_url: signature,
+        reg_photo_data_url: regPhoto,
         pending_photos: defectPhotos.map((photo, i) => ({
           id: `photo-${i}`,
           item_id: activeDefectItem?.id ?? '',
@@ -577,6 +621,89 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
     );
   }
 
+  // Reg Photo Step
+  if (step === 'reg_photo') {
+    return (
+      <div className="min-h-screen bg-slate-100 flex flex-col">
+        {/* Timer Header */}
+        <div className="bg-white border-b border-slate-200 p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-500">10 minutes advised</span>
+            <div className="flex items-center gap-2 text-slate-700">
+              <Clock className="w-4 h-4" />
+              <span className="font-mono font-medium">{formatTime(elapsedSeconds)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 p-4 flex flex-col">
+          <div className="bg-white rounded-lg p-6 shadow-sm flex-1 flex flex-col">
+            <h2 className="text-lg font-bold text-slate-900 mb-2">
+              Photo of Registration Plate
+            </h2>
+            <p className="text-sm text-slate-500 mb-6">
+              Take a clear photo of the vehicle's registration plate
+            </p>
+
+            <div className="flex-1 flex flex-col items-center justify-center">
+              {regPhoto ? (
+                <div className="relative w-full max-w-sm">
+                  <img
+                    src={regPhoto}
+                    alt="Registration plate"
+                    className="w-full rounded-lg shadow-md"
+                  />
+                  <button
+                    onClick={() => setRegPhoto(null)}
+                    className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center shadow-md"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => regPhotoInputRef.current?.click()}
+                  className="w-full max-w-sm aspect-video border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-400 hover:text-slate-600 hover:border-slate-400 transition-colors"
+                >
+                  <Camera className="w-12 h-12 mb-2" />
+                  <span className="font-medium">Tap to take photo</span>
+                </button>
+              )}
+              <input
+                ref={regPhotoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleRegPhotoCapture}
+                className="hidden"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white border-t border-slate-200 p-4">
+          <div className="flex gap-3">
+            <button
+              onClick={() => setStep('intro')}
+              className="flex-1 py-3 bg-slate-200 text-slate-700 font-medium rounded-lg flex items-center justify-center gap-2"
+            >
+              <ChevronLeft className="w-5 h-5" />
+              Back
+            </button>
+            <button
+              onClick={handleRegPhotoContinue}
+              disabled={!regPhoto}
+              className="flex-1 py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+            >
+              Continue
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Category Check - handle missing template/category
   if (step === 'category' && !currentCategory) {
     return (
@@ -602,7 +729,18 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
   if (step === 'category' && currentCategory) {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col">
-        {/* Header */}
+        {/* Timer Header */}
+        <div className="bg-slate-800 text-white px-4 py-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-300">10 minutes advised</span>
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              <span className="font-mono font-medium">{formatTime(elapsedSeconds)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Category Header */}
         <div className="bg-white border-b border-slate-200 p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-slate-500">
@@ -642,8 +780,7 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
           <div className="flex gap-3">
             <button
               onClick={handlePrevCategory}
-              disabled={currentCategoryIndex === 0}
-              className="flex-1 py-3 bg-slate-200 text-slate-700 font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="flex-1 py-3 bg-slate-200 text-slate-700 font-medium rounded-lg flex items-center justify-center gap-2"
             >
               <ChevronLeft className="w-5 h-5" />
               Back
@@ -730,19 +867,9 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
                 {failedItems.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg"
+                    className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg"
                   >
-                    <span
-                      className={`px-2 py-0.5 text-xs font-bold rounded ${
-                        item.severity === 'critical'
-                          ? 'bg-red-500 text-white'
-                          : item.severity === 'major'
-                          ? 'bg-amber-500 text-white'
-                          : 'bg-blue-500 text-white'
-                      }`}
-                    >
-                      {item.severity.toUpperCase()}
-                    </span>
+                    <X className="w-5 h-5 text-red-500 flex-shrink-0" />
                     <span className="text-sm text-slate-700">{item.label}</span>
                   </div>
                 ))}
@@ -894,7 +1021,7 @@ function CheckItemRow({ item, result, onResult }: CheckItemRowProps) {
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
       <div className="p-4">
-        <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="flex items-start gap-2 mb-3">
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-slate-900">
@@ -914,17 +1041,6 @@ function CheckItemRow({ item, result, onResult }: CheckItemRowProps) {
               </button>
             )}
           </div>
-          <span
-            className={`px-2 py-0.5 text-xs font-bold rounded ${
-              item.severity === 'critical'
-                ? 'bg-red-100 text-red-700'
-                : item.severity === 'major'
-                ? 'bg-amber-100 text-amber-700'
-                : 'bg-blue-100 text-blue-700'
-            }`}
-          >
-            {item.severity === 'critical' ? 'CRIT' : item.severity === 'major' ? 'MAJ' : 'MIN'}
-          </span>
         </div>
 
         {showHelp && item.help_text && (

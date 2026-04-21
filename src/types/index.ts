@@ -323,6 +323,7 @@ export interface PendingCheckRun {
   results: CheckItemResult[];
   overall_status: CheckStatus;
   signature_data_url: string;
+  reg_photo_data_url: string | null;
   pending_photos: PendingPhoto[];
   // Sync tracking
   created_at: string;

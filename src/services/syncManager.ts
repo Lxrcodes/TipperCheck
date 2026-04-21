@@ -68,6 +68,23 @@ export async function syncPendingChecks(): Promise<SyncResult> {
         console.log('No signature to upload');
       }
 
+      // Upload reg photo if present
+      let regPhotoUrl: string | null = null;
+      if (check.reg_photo_data_url) {
+        console.log('Uploading reg photo...');
+        try {
+          regPhotoUrl = await uploadRegPhoto(
+            check.client_id,
+            check.reg_photo_data_url
+          );
+          console.log('Reg photo URL:', regPhotoUrl);
+        } catch (regErr) {
+          console.error('Reg photo upload threw:', regErr);
+        }
+      } else {
+        console.log('No reg photo to upload');
+      }
+
       // Prepare check data for submission
       const checkData = {
         org_id: check.org_id,
@@ -90,6 +107,7 @@ export async function syncPendingChecks(): Promise<SyncResult> {
         results: updateResultsWithPhotoUrls(check.results, uploadedPhotoUrls),
         overall_status: check.overall_status,
         signature_url: signatureUrl,
+        reg_photo_url: regPhotoUrl,
       };
 
       console.log('Inserting check into check_runs:', checkData);
@@ -213,6 +231,42 @@ async function uploadSignature(
     return urlData.publicUrl;
   } catch (error) {
     console.error('Signature upload error:', error);
+    return null;
+  }
+}
+
+/**
+ * Upload reg photo and return URL
+ */
+async function uploadRegPhoto(
+  checkId: string,
+  dataUrl: string
+): Promise<string | null> {
+  try {
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    const ext = blob.type.split('/')[1] || 'jpg';
+    const fileName = `reg-photos/${checkId}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('check-photos')
+      .upload(fileName, blob, {
+        contentType: blob.type,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('Reg photo upload failed:', uploadError);
+      return null;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('check-photos')
+      .getPublicUrl(fileName);
+
+    return urlData.publicUrl;
+  } catch (error) {
+    console.error('Reg photo upload error:', error);
     return null;
   }
 }
