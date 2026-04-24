@@ -533,44 +533,51 @@ interface VehiclesViewProps {
 function VehiclesView({ vehicles, onAdd, onEdit }: VehiclesViewProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<VehicleStatus | 'all'>('all');
+  const [expandedVehicleId, setExpandedVehicleId] = useState<string | null>(null);
 
   const filtered = vehicles.filter((v) => {
     const matchesSearch =
       v.registration.toLowerCase().includes(search.toLowerCase()) ||
-      (v.make?.toLowerCase().includes(search.toLowerCase()) ?? false);
+      (v.make?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
+      (v.model?.toLowerCase().includes(search.toLowerCase()) ?? false);
     const matchesStatus = statusFilter === 'all' || v.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
+  const toggleExpand = (vehicleId: string) => {
+    setExpandedVehicleId(expandedVehicleId === vehicleId ? null : vehicleId);
+  };
+
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-heading text-slate-900">Vehicles</h1>
+    <div className="p-4 md:p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl md:text-2xl font-heading text-slate-900">Vehicles</h1>
         <button
           onClick={onAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors"
+          className="flex items-center gap-2 px-3 py-2 md:px-4 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors text-sm md:text-base"
         >
           <Plus className="w-5 h-5" />
-          Add Vehicle
+          <span className="hidden sm:inline">Add Vehicle</span>
+          <span className="sm:hidden">Add</span>
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-4 mb-6">
-        <div className="relative flex-1 max-w-xs">
+      {/* Search and Filter */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search vehicles..."
-            className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+            placeholder="Search registration, make, model..."
+            className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none bg-white"
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as VehicleStatus | 'all')}
-          className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+          className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none bg-white"
         >
           <option value="all">All Status</option>
           {VEHICLE_STATUSES.map((s) => (
@@ -581,75 +588,148 @@ function VehiclesView({ vehicles, onAdd, onEdit }: VehiclesViewProps) {
         </select>
       </div>
 
-      {/* Vehicle List */}
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase">
-                Registration
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase">
-                Type
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase">
-                Make / Model
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase">
-                Status
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase">
-                MOT Due
-              </th>
-              <th className="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {filtered.map((vehicle) => (
-              <tr key={vehicle.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3 font-mono font-bold text-slate-900">
-                  {vehicle.registration}
-                </td>
-                <td className="px-4 py-3 text-slate-600">
-                  {VEHICLE_TYPES.find((t) => t.value === vehicle.vehicle_type)?.label}
-                </td>
-                <td className="px-4 py-3 text-slate-600">
-                  {vehicle.make} {vehicle.model}
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`inline-flex px-2 py-1 text-xs font-bold rounded ${getVehicleStatusColor(
-                      vehicle.status
-                    )}`}
-                  >
-                    {getVehicleStatusLabel(vehicle.status)}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-slate-600">
-                  {vehicle.mot_due_date
-                    ? new Date(vehicle.mot_due_date).toLocaleDateString()
-                    : '-'}
-                </td>
-                <td className="px-4 py-3">
-                  <button
-                    onClick={() => onEdit(vehicle)}
-                    className="p-2 text-slate-400 hover:text-slate-600"
-                  >
-                    <MoreVertical className="w-5 h-5" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Vehicle Cards */}
+      {filtered.length === 0 ? (
+        <div className="bg-white rounded-lg p-12 text-center">
+          <Truck className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <p className="text-slate-600">
+            {search || statusFilter !== 'all' ? 'No vehicles match your search' : 'No vehicles yet'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((vehicle) => {
+            const isExpanded = expandedVehicleId === vehicle.id;
+            const vehicleTypeLabel = VEHICLE_TYPES.find((t) => t.value === vehicle.vehicle_type)?.label;
 
-        {filtered.length === 0 && (
-          <div className="text-center py-12 text-slate-500">
-            <Truck className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p>No vehicles found</p>
-          </div>
-        )}
-      </div>
+            return (
+              <div
+                key={vehicle.id}
+                className="bg-white rounded-lg shadow-sm overflow-hidden"
+              >
+                {/* Vehicle Header - Always visible */}
+                <button
+                  onClick={() => toggleExpand(vehicle.id)}
+                  className="w-full p-4 flex items-center gap-3 text-left hover:bg-slate-50 transition-colors"
+                >
+                  {/* Vehicle icon with status color */}
+                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                    vehicle.status === 'active'
+                      ? 'bg-green-100'
+                      : vehicle.status === 'vor'
+                      ? 'bg-amber-100'
+                      : 'bg-slate-100'
+                  }`}>
+                    <Truck className={`w-6 h-6 ${
+                      vehicle.status === 'active'
+                        ? 'text-green-600'
+                        : vehicle.status === 'vor'
+                        ? 'text-amber-600'
+                        : 'text-slate-400'
+                    }`} />
+                  </div>
+
+                  {/* Registration and type */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-slate-900">
+                        {vehicle.registration}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 text-xs font-bold rounded ${getVehicleStatusColor(vehicle.status)}`}
+                      >
+                        {getVehicleStatusLabel(vehicle.status)}
+                      </span>
+                    </div>
+                    <div className="text-sm text-slate-500 truncate">
+                      {vehicleTypeLabel}
+                      {(vehicle.make || vehicle.model) && ` • ${vehicle.make} ${vehicle.model}`.trim()}
+                    </div>
+                  </div>
+
+                  {/* Expand indicator */}
+                  <ChevronRight
+                    className={`w-5 h-5 text-slate-400 transition-transform ${
+                      isExpanded ? 'rotate-90' : ''
+                    }`}
+                  />
+                </button>
+
+                {/* Expanded Details */}
+                {isExpanded && (
+                  <div className="px-4 pb-4 border-t border-slate-100">
+                    <div className="pt-3 space-y-3">
+                      {/* Type */}
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500">Type</span>
+                        <span className="text-slate-900">{vehicleTypeLabel}</span>
+                      </div>
+
+                      {/* Make / Model */}
+                      {(vehicle.make || vehicle.model) && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-slate-500">Make / Model</span>
+                          <span className="text-slate-900">{vehicle.make} {vehicle.model}</span>
+                        </div>
+                      )}
+
+                      {/* VIN */}
+                      {vehicle.vin && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-slate-500">VIN</span>
+                          <span className="text-slate-900 font-mono text-xs">{vehicle.vin}</span>
+                        </div>
+                      )}
+
+                      {/* MOT Due */}
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500">MOT Due</span>
+                        <span className={`${
+                          vehicle.mot_due_date && new Date(vehicle.mot_due_date) < new Date()
+                            ? 'text-red-600 font-medium'
+                            : 'text-slate-900'
+                        }`}>
+                          {vehicle.mot_due_date
+                            ? new Date(vehicle.mot_due_date).toLocaleDateString()
+                            : 'Not set'}
+                        </span>
+                      </div>
+
+                      {/* Next PMI */}
+                      {vehicle.next_pmi_due_date && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-slate-500">Next PMI</span>
+                          <span className="text-slate-900">
+                            {new Date(vehicle.next_pmi_due_date).toLocaleDateString()}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Status Notes */}
+                      {vehicle.status_notes && (
+                        <div className="text-sm">
+                          <span className="text-slate-500 block mb-1">Notes</span>
+                          <p className="text-slate-700 bg-slate-50 p-2 rounded">
+                            {vehicle.status_notes}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Edit Button */}
+                      <button
+                        onClick={() => onEdit(vehicle)}
+                        className="w-full mt-2 py-2 px-4 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition-colors text-sm"
+                      >
+                        Edit Vehicle
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -667,14 +747,25 @@ interface TeamViewProps {
 
 function TeamView({ users, currentUserId, onAdd, onEdit }: TeamViewProps) {
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   const toggleExpand = (userId: string) => {
     setExpandedUserId(expandedUserId === userId ? null : userId);
   };
 
+  const filtered = users.filter((u) => {
+    if (!search) return true;
+    const searchLower = search.toLowerCase();
+    return (
+      u.name.toLowerCase().includes(searchLower) ||
+      u.email.toLowerCase().includes(searchLower) ||
+      (u.phone?.toLowerCase().includes(searchLower) ?? false)
+    );
+  });
+
   return (
     <div className="p-4 md:p-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl md:text-2xl font-heading text-slate-900">Team</h1>
         <button
           onClick={onAdd}
@@ -686,14 +777,33 @@ function TeamView({ users, currentUserId, onAdd, onEdit }: TeamViewProps) {
         </button>
       </div>
 
+      {/* Search */}
+      {users.length > 0 && (
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, email, or phone..."
+            className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none bg-white"
+          />
+        </div>
+      )}
+
       {users.length === 0 ? (
         <div className="bg-white rounded-lg p-12 text-center">
           <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-600">No team members yet</p>
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-lg p-12 text-center">
+          <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <p className="text-slate-600">No team members match your search</p>
+        </div>
       ) : (
         <div className="space-y-3">
-          {users.map((user) => {
+          {filtered.map((user) => {
             const isExpanded = expandedUserId === user.id;
             const isCurrentUser = user.id === currentUserId;
 
