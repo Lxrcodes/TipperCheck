@@ -14,6 +14,8 @@ import {
   Loader2,
   Search,
   MoreVertical,
+  Menu,
+  X,
 } from 'lucide-react';
 import type {
   AuthUser,
@@ -47,6 +49,7 @@ interface DashboardProps {
 export function Dashboard({ user, org, onLogout, onSwitchToDriver }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<DashboardTab>('today');
   const [loading, setLoading] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Data
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -116,49 +119,99 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver }: DashboardPr
   const uncheckedVehicles = activeVehicles.filter((v) => !checkedToday.has(v.id));
   const criticalDefects = openDefects.filter((d) => d.severity === 'critical');
 
+  // Close mobile menu when changing tabs
+  const handleTabChange = (tab: DashboardTab) => {
+    setActiveTab(tab);
+    setMobileMenuOpen(false);
+  };
+
+  const handleSwitchToDriverMobile = () => {
+    setMobileMenuOpen(false);
+    onSwitchToDriver();
+  };
+
   return (
-    <div className="min-h-screen bg-slate-100 flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 flex flex-col">
+    <div className="min-h-screen bg-slate-100 flex flex-col md:flex-row">
+      {/* Mobile Header */}
+      <div className="md:hidden bg-slate-900 text-white px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
+            <Truck className="w-5 h-5 text-white" />
+          </div>
+          <span className="font-bold">{org.name}</span>
+        </div>
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="p-2 hover:bg-slate-800 rounded-lg"
+        >
+          {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        </button>
+      </div>
+
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/50 z-40"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - hidden on mobile unless menu is open */}
+      <aside
+        className={`
+          fixed md:static inset-y-0 left-0 z-50
+          w-64 bg-slate-900 flex flex-col
+          transform transition-transform duration-200 ease-in-out
+          ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+          md:translate-x-0
+        `}
+      >
         <div className="p-4 border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
               <Truck className="w-6 h-6 text-white" />
             </div>
-            <div>
+            <div className="flex-1 min-w-0">
               <div className="text-white font-bold truncate">{org.name}</div>
-              <div className="text-xs text-slate-400">{user.name}</div>
+              <div className="text-xs text-slate-400 truncate">{user.name}</div>
             </div>
+            {/* Close button for mobile */}
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="md:hidden p-1 text-slate-400 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
         </div>
 
-        <nav className="flex-1 p-2">
+        <nav className="flex-1 p-2 overflow-y-auto">
           <NavItem
             icon={LayoutDashboard}
             label="Today"
             active={activeTab === 'today'}
-            onClick={() => setActiveTab('today')}
+            onClick={() => handleTabChange('today')}
             badge={uncheckedVehicles.length > 0 ? uncheckedVehicles.length : undefined}
           />
           <NavItem
             icon={Truck}
             label="Vehicles"
             active={activeTab === 'vehicles'}
-            onClick={() => setActiveTab('vehicles')}
+            onClick={() => handleTabChange('vehicles')}
             badge={vehicles.length}
           />
           <NavItem
             icon={Users}
             label="Team"
             active={activeTab === 'team'}
-            onClick={() => setActiveTab('team')}
+            onClick={() => handleTabChange('team')}
             badge={users.length}
           />
           <NavItem
             icon={AlertTriangle}
             label="Defects"
             active={activeTab === 'defects'}
-            onClick={() => setActiveTab('defects')}
+            onClick={() => handleTabChange('defects')}
             badge={openDefects.length > 0 ? openDefects.length : undefined}
             badgeColor={criticalDefects.length > 0 ? 'red' : 'amber'}
           />
@@ -166,14 +219,14 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver }: DashboardPr
             icon={Settings}
             label="Settings"
             active={activeTab === 'settings'}
-            onClick={() => setActiveTab('settings')}
+            onClick={() => handleTabChange('settings')}
           />
         </nav>
 
         <div className="p-2 border-t border-slate-800">
           {isDriver(user) && (
             <button
-              onClick={onSwitchToDriver}
+              onClick={handleSwitchToDriverMobile}
               className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-lg transition-colors mb-1"
             >
               <Truck className="w-5 h-5" />
