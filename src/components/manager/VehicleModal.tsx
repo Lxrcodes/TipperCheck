@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '@/services/supabaseClient';
+import { updateSubscriptionQuantity } from '@/services/stripeClient';
 import { X, Loader2 } from 'lucide-react';
 import type { Vehicle, VehicleType, VehicleStatus } from '@/types';
 import { VEHICLE_TYPES, VEHICLE_STATUSES } from '@/types';
@@ -69,6 +70,23 @@ export function VehicleModal({ vehicle, orgId, userId, onClose, onSaved }: Vehic
         });
 
         if (insertError) throw insertError;
+      }
+
+      // Update subscription if vehicle count changed
+      // (new vehicle added OR status changed to/from active)
+      const statusChanged = isEditing && vehicle?.status !== status;
+      const isNewActiveVehicle = !isEditing && status === 'active';
+
+      if (statusChanged || isNewActiveVehicle) {
+        // Get updated vehicle count
+        const { count } = await supabase
+          .from('vehicles')
+          .select('*', { count: 'exact', head: true })
+          .eq('org_id', orgId)
+          .eq('status', 'active');
+
+        // Update subscription quantity (fire and forget - don't block UI)
+        updateSubscriptionQuantity(orgId, count ?? 0).catch(console.error);
       }
 
       onSaved();

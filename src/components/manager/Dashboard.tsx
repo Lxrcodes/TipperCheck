@@ -291,7 +291,7 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver }: DashboardPr
             {activeTab === 'defects' && (
               <DefectsView defects={openDefects} onRefresh={loadData} />
             )}
-            {activeTab === 'settings' && <SettingsView org={org} />}
+            {activeTab === 'settings' && <SettingsView org={org} activeVehicleCount={activeVehicles.length} />}
           </>
         )}
       </main>
@@ -1018,14 +1018,70 @@ function DefectsView({ defects, onRefresh }: DefectsViewProps) {
 
 interface SettingsViewProps {
   org: Organisation;
+  activeVehicleCount: number;
 }
 
-function SettingsView({ org }: SettingsViewProps) {
+function SettingsView({ org, activeVehicleCount }: SettingsViewProps) {
+  const [billingLoading, setBillingLoading] = useState(false);
+
+  // Calculate billing
+  const FREE_VEHICLES = 1;
+  const PRICE_PER_VEHICLE_WEEKLY = 0.70;
+  const billableVehicles = Math.max(0, activeVehicleCount - FREE_VEHICLES);
+  const weeklyTotal = billableVehicles * PRICE_PER_VEHICLE_WEEKLY;
+  const monthlyEstimate = weeklyTotal * 4.33; // Average weeks per month
+
+  const handleSetupBilling = async () => {
+    setBillingLoading(true);
+    try {
+      const { createCheckoutSession } = await import('@/services/stripeClient');
+      const url = await createCheckoutSession(org.id);
+      if (url) {
+        window.location.href = url;
+      }
+    } catch (err) {
+      console.error('Failed to create checkout session:', err);
+    } finally {
+      setBillingLoading(false);
+    }
+  };
+
+  const handleManageBilling = async () => {
+    setBillingLoading(true);
+    try {
+      const { createPortalSession } = await import('@/services/stripeClient');
+      const url = await createPortalSession(org.id);
+      if (url) {
+        window.location.href = url;
+      }
+    } catch (err) {
+      console.error('Failed to create portal session:', err);
+    } finally {
+      setBillingLoading(false);
+    }
+  };
+
+  const getStatusBadge = () => {
+    switch (org.subscription_status) {
+      case 'active':
+        return <span className="px-2 py-1 text-xs font-bold rounded bg-green-100 text-green-700">Active</span>;
+      case 'trialing':
+        return <span className="px-2 py-1 text-xs font-bold rounded bg-blue-100 text-blue-700">Free Trial</span>;
+      case 'past_due':
+        return <span className="px-2 py-1 text-xs font-bold rounded bg-red-100 text-red-700">Past Due</span>;
+      case 'canceled':
+        return <span className="px-2 py-1 text-xs font-bold rounded bg-slate-100 text-slate-700">Cancelled</span>;
+      default:
+        return <span className="px-2 py-1 text-xs font-bold rounded bg-slate-100 text-slate-700">No Plan</span>;
+    }
+  };
+
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-heading text-slate-900 mb-6">Settings</h1>
+    <div className="p-4 md:p-6">
+      <h1 className="text-xl md:text-2xl font-heading text-slate-900 mb-6">Settings</h1>
 
       <div className="max-w-2xl space-y-6">
+        {/* Organisation Info */}
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h2 className="text-lg font-bold text-slate-900 mb-4">Organisation</h2>
           <div className="space-y-3">
@@ -1037,25 +1093,98 @@ function SettingsView({ org }: SettingsViewProps) {
               <div className="text-xs font-bold text-slate-500 uppercase">Contact Email</div>
               <div className="text-slate-900">{org.contact_email || '-'}</div>
             </div>
-            <div>
-              <div className="text-xs font-bold text-slate-500 uppercase">Subscription</div>
-              <div className="text-slate-900 capitalize">{org.subscription_status}</div>
-            </div>
-            <div>
-              <div className="text-xs font-bold text-slate-500 uppercase">Active Vehicles</div>
-              <div className="text-slate-900">{org.active_vehicle_count}</div>
-            </div>
           </div>
         </div>
 
+        {/* Billing Section */}
         <div className="bg-white rounded-lg shadow-sm p-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">Billing</h2>
-          <p className="text-slate-600 text-sm mb-4">
-            First vehicle free, then £3.50/vehicle/month for active vehicles.
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-slate-900">Billing</h2>
+            {getStatusBadge()}
+          </div>
+
+          {/* Pricing Info */}
+          <div className="bg-slate-50 rounded-lg p-4 mb-4">
+            <div className="text-sm text-slate-600 mb-2">
+              <span className="font-bold text-slate-900">70p</span> per vehicle per week
+            </div>
+            <div className="text-xs text-slate-500">
+              First vehicle is always free
+            </div>
+          </div>
+
+          {/* Current Usage */}
+          <div className="space-y-3 mb-6">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-600">Active Vehicles</span>
+              <span className="font-bold text-slate-900">{activeVehicleCount}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-600">Free Allowance</span>
+              <span className="font-bold text-green-600">-{FREE_VEHICLES}</span>
+            </div>
+            <div className="border-t border-slate-200 pt-3 flex items-center justify-between">
+              <span className="text-sm text-slate-600">Billable Vehicles</span>
+              <span className="font-bold text-slate-900">{billableVehicles}</span>
+            </div>
+            {billableVehicles > 0 && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Weekly Total</span>
+                  <span className="font-bold text-slate-900">£{weeklyTotal.toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-sm">Monthly Estimate</span>
+                  <span className="text-sm">~£{monthlyEstimate.toFixed(2)}</span>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Action Button */}
+          {org.subscription_id ? (
+            <button
+              onClick={handleManageBilling}
+              disabled={billingLoading}
+              className="w-full py-3 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+            >
+              {billingLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                'Manage Billing'
+              )}
+            </button>
+          ) : billableVehicles > 0 ? (
+            <button
+              onClick={handleSetupBilling}
+              disabled={billingLoading}
+              className="w-full py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+            >
+              {billingLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                'Set Up Billing'
+              )}
+            </button>
+          ) : (
+            <div className="text-center text-sm text-slate-500 py-3 bg-slate-50 rounded-lg">
+              No payment required - you're on the free plan
+            </div>
+          )}
+        </div>
+
+        {/* Danger Zone */}
+        <div className="bg-white rounded-lg shadow-sm p-6 border border-red-200">
+          <h2 className="text-lg font-bold text-red-600 mb-4">Danger Zone</h2>
+          <p className="text-sm text-slate-600 mb-4">
+            Contact support to delete your organisation and all associated data.
           </p>
-          <button className="px-4 py-2 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800">
-            Manage Billing
-          </button>
+          <a
+            href="mailto:support@tippercheck.com?subject=Account Deletion Request"
+            className="text-sm text-red-600 hover:underline"
+          >
+            Request Account Deletion
+          </a>
         </div>
       </div>
     </div>
