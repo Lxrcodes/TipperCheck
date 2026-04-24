@@ -16,6 +16,10 @@ import {
   MoreVertical,
   Menu,
   X,
+  ChevronRight,
+  Mail,
+  Phone,
+  User as UserIcon,
 } from 'lucide-react';
 import type {
   AuthUser,
@@ -662,84 +666,148 @@ interface TeamViewProps {
 }
 
 function TeamView({ users, currentUserId, onAdd, onEdit }: TeamViewProps) {
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+
+  const toggleExpand = (userId: string) => {
+    setExpandedUserId(expandedUserId === userId ? null : userId);
+  };
+
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-heading text-slate-900">Team</h1>
+        <h1 className="text-xl md:text-2xl font-heading text-slate-900">Team</h1>
         <button
           onClick={onAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors"
+          className="flex items-center gap-2 px-3 py-2 md:px-4 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors text-sm md:text-base"
         >
           <Plus className="w-5 h-5" />
-          Invite User
+          <span className="hidden sm:inline">Invite User</span>
+          <span className="sm:hidden">Invite</span>
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase">
-                Name
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase">
-                Email
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase">
-                Roles
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase">
-                Status
-              </th>
-              <th className="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {users.map((user) => (
-              <tr key={user.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3">
-                  <div className="font-medium text-slate-900">{user.name}</div>
-                  {user.id === currentUserId && (
-                    <span className="text-xs text-slate-400">(you)</span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-slate-600">{user.email}</td>
-                <td className="px-4 py-3">
-                  <div className="flex gap-1">
-                    {user.roles.map((role) => (
-                      <span
-                        key={role}
-                        className={`px-2 py-0.5 text-xs font-bold rounded ${
-                          role === 'manager'
-                            ? 'bg-purple-100 text-purple-700'
-                            : 'bg-blue-100 text-blue-700'
-                        }`}
-                      >
-                        {role}
-                      </span>
-                    ))}
+      {users.length === 0 ? (
+        <div className="bg-white rounded-lg p-12 text-center">
+          <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <p className="text-slate-600">No team members yet</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {users.map((user) => {
+            const isExpanded = expandedUserId === user.id;
+            const isCurrentUser = user.id === currentUserId;
+
+            return (
+              <div
+                key={user.id}
+                className="bg-white rounded-lg shadow-sm overflow-hidden"
+              >
+                {/* Profile Header - Always visible */}
+                <button
+                  onClick={() => toggleExpand(user.id)}
+                  className="w-full p-4 flex items-center gap-3 text-left hover:bg-slate-50 transition-colors"
+                >
+                  {/* Avatar */}
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    user.is_active ? 'bg-orange-100' : 'bg-slate-100'
+                  }`}>
+                    <UserIcon className={`w-6 h-6 ${
+                      user.is_active ? 'text-orange-600' : 'text-slate-400'
+                    }`} />
                   </div>
-                </td>
-                <td className="px-4 py-3">
-                  {user.is_active ? (
-                    <span className="text-green-600 text-sm">Active</span>
-                  ) : (
-                    <span className="text-slate-400 text-sm">Deactivated</span>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <button
-                    onClick={() => onEdit(user)}
-                    className="p-2 text-slate-400 hover:text-slate-600"
-                  >
-                    <MoreVertical className="w-5 h-5" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+
+                  {/* Name and roles */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-slate-900 truncate">
+                        {user.name}
+                      </span>
+                      {isCurrentUser && (
+                        <span className="text-xs text-slate-400">(you)</span>
+                      )}
+                      {!user.is_active && (
+                        <span className="px-1.5 py-0.5 text-xs bg-slate-100 text-slate-500 rounded">
+                          Inactive
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-1 mt-1">
+                      {user.roles.map((role) => (
+                        <span
+                          key={role}
+                          className={`px-2 py-0.5 text-xs font-bold rounded ${
+                            role === 'manager'
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'bg-blue-100 text-blue-700'
+                          }`}
+                        >
+                          {role}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Expand indicator */}
+                  <ChevronRight
+                    className={`w-5 h-5 text-slate-400 transition-transform ${
+                      isExpanded ? 'rotate-90' : ''
+                    }`}
+                  />
+                </button>
+
+                {/* Expanded Details */}
+                {isExpanded && (
+                  <div className="px-4 pb-4 border-t border-slate-100">
+                    <div className="pt-3 space-y-3">
+                      {/* Email */}
+                      <div className="flex items-center gap-3 text-sm">
+                        <Mail className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                        <a
+                          href={`mailto:${user.email}`}
+                          className="text-blue-600 hover:underline truncate"
+                        >
+                          {user.email}
+                        </a>
+                      </div>
+
+                      {/* Phone */}
+                      {user.phone && (
+                        <div className="flex items-center gap-3 text-sm">
+                          <Phone className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                          <a
+                            href={`tel:${user.phone}`}
+                            className="text-blue-600 hover:underline"
+                          >
+                            {user.phone}
+                          </a>
+                        </div>
+                      )}
+
+                      {/* Status */}
+                      <div className="flex items-center gap-3 text-sm">
+                        <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${
+                          user.is_active ? 'text-green-500' : 'text-slate-300'
+                        }`} />
+                        <span className={user.is_active ? 'text-green-600' : 'text-slate-500'}>
+                          {user.is_active ? 'Active' : 'Deactivated'}
+                        </span>
+                      </div>
+
+                      {/* Edit Button */}
+                      <button
+                        onClick={() => onEdit(user)}
+                        className="w-full mt-2 py-2 px-4 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition-colors text-sm"
+                      >
+                        Edit Profile
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
