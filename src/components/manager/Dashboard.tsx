@@ -13,7 +13,6 @@ import {
   Clock,
   Loader2,
   Search,
-  MoreVertical,
   Menu,
   X,
   ChevronRight,
