@@ -10,9 +10,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
-        name: 'TipperCheck',
-        short_name: 'TipperCheck',
-        description: 'Vehicle Daily Check App for Tipper Fleets',
+        name: 'Checkatruck',
+        short_name: 'Checkatruck',
+        description: 'Vehicle Daily Check App',
         theme_color: '#f97316',
         background_color: '#0f172a',
         display: 'standalone',

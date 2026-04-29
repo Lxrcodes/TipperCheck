@@ -185,7 +185,7 @@ export function AcceptInvite() {
           <div className="inline-flex items-center justify-center w-20 h-20 bg-green-500 rounded-full mb-6">
             <Check className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-2xl font-heading text-white mb-2">Welcome to TipperCheck!</h1>
+          <h1 className="text-2xl font-heading text-white mb-2">Welcome to Checkatruck!</h1>
           <p className="text-slate-400">Your account is ready. Redirecting you now...</p>
         </div>
       </div>
@@ -203,7 +203,7 @@ export function AcceptInvite() {
           <h1 className="text-2xl font-heading text-white">Set Up Your Account</h1>
           <p className="text-slate-400 mt-2">
             Hi <strong className="text-white">{inviteData?.name}</strong>! You've been invited to join{' '}
-            <strong className="text-orange-400">{inviteData?.orgName}</strong> on TipperCheck.
+            <strong className="text-orange-400">{inviteData?.orgName}</strong> on Checkatruck.
           </p>
         </div>
 

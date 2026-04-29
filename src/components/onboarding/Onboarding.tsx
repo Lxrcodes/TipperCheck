@@ -247,7 +247,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-500 rounded-2xl mb-4">
               <Truck className="w-10 h-10 text-white" />
             </div>
-            <h1 className="text-2xl font-heading text-white">Welcome to TipperCheck</h1>
+            <h1 className="text-2xl font-heading text-white">Welcome to Checkatruck</h1>
             <p className="text-slate-400 mt-2">Let's get your account set up</p>
           </div>
 
@@ -417,7 +417,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
             <div>
               <h1 className="text-xl font-heading text-white">Add Your First Vehicle</h1>
               <p className="text-sm text-slate-400">
-                Add a vehicle to get started with TipperCheck
+                Add a vehicle to get started with Checkatruck
               </p>
             </div>
           </div>
@@ -542,7 +542,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
               </div>
               <h1 className="text-2xl font-heading text-white mb-2">Complete Your Subscription</h1>
               <p className="text-slate-400 mb-6">
-                Your account is ready. Complete payment to start using TipperCheck.
+                Your account is ready. Complete payment to start using Checkatruck.
               </p>
 
               {error && (

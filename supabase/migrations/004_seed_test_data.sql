@@ -1,5 +1,5 @@
 -- ============================================================================
--- TipperCheck Seed Data
+-- Checkatruck Seed Data
 -- Migration: 004_seed_test_data
 --
 -- Creates:

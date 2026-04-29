@@ -190,12 +190,12 @@ export function UserModal({ user, orgId, currentUserId, onClose, onSaved }: User
   };
 
   const handleShareWhatsApp = () => {
-    const message = `Hi ${name}, you've been invited to join TipperCheck! Click this link to set up your account: ${getInviteUrl()}`;
+    const message = `Hi ${name}, you've been invited to join Checkatruck! Click this link to set up your account: ${getInviteUrl()}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   const handleShareSMS = () => {
-    const message = `You've been invited to TipperCheck. Set up your account: ${getInviteUrl()}`;
+    const message = `You've been invited to Checkatruck. Set up your account: ${getInviteUrl()}`;
     window.open(`sms:?body=${encodeURIComponent(message)}`, '_blank');
   };
 

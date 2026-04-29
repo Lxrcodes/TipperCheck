@@ -11,7 +11,7 @@ import type {
 // IndexedDB Schema
 // ============================================================================
 
-interface TipperCheckDB extends DBSchema {
+interface CheckatruckDB extends DBSchema {
   pendingChecks: {
     key: string;
     value: PendingCheck;
@@ -41,20 +41,20 @@ interface TipperCheckDB extends DBSchema {
   };
 }
 
-const DB_NAME = 'tippercheck-offline';
+const DB_NAME = 'checkatruck-offline';
 const DB_VERSION = 2;
 
-let dbInstance: IDBPDatabase<TipperCheckDB> | null = null;
+let dbInstance: IDBPDatabase<CheckatruckDB> | null = null;
 
 // ============================================================================
 // Database Initialization
 // ============================================================================
 
-export async function getDb(): Promise<IDBPDatabase<TipperCheckDB>> {
+export async function getDb(): Promise<IDBPDatabase<CheckatruckDB>> {
   if (dbInstance) return dbInstance;
 
   try {
-    dbInstance = await openDB<TipperCheckDB>(DB_NAME, DB_VERSION, {
+    dbInstance = await openDB<CheckatruckDB>(DB_NAME, DB_VERSION, {
       upgrade(db, oldVersion) {
         console.log(`Upgrading IndexedDB from v${oldVersion} to v${DB_VERSION}`);
 

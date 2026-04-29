@@ -1,4 +1,4 @@
-# TipperCheck Implementation Decisions
+# Checkatruck Implementation Decisions
 
 ## Assumptions Made
 

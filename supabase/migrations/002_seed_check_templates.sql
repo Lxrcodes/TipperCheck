@@ -1,5 +1,5 @@
 -- ============================================================================
--- TipperCheck Seed Data: Check Templates
+-- Checkatruck Seed Data: Check Templates
 -- Migration: 002_seed_check_templates
 -- ============================================================================
 

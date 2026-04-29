@@ -1,5 +1,5 @@
 // ============================================================================
-// TipperCheck Type Definitions
+// Checkatruck Type Definitions
 // v2: Organisation → User → Vehicle → CheckRun model
 // ============================================================================
 

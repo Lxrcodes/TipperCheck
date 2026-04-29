@@ -1,5 +1,5 @@
 -- ============================================================================
--- TipperCheck Database Schema v2
+-- Checkatruck Database Schema v2
 -- Migration: 003_auth_org_model
 --
 -- Implements the Organisation → User → Vehicle → CheckRun model
