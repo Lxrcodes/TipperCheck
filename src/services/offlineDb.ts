@@ -11,7 +11,7 @@ import type {
 // IndexedDB Schema
 // ============================================================================
 
-interface CheckatruckDB extends DBSchema {
+interface CheckaTruckDB extends DBSchema {
   pendingChecks: {
     key: string;
     value: PendingCheck;
@@ -41,20 +41,20 @@ interface CheckatruckDB extends DBSchema {
   };
 }
 
-const DB_NAME = 'checkatruck-offline';
+const DB_NAME = 'CheckaTruck-offline';
 const DB_VERSION = 2;
 
-let dbInstance: IDBPDatabase<CheckatruckDB> | null = null;
+let dbInstance: IDBPDatabase<CheckaTruckDB> | null = null;
 
 // ============================================================================
 // Database Initialization
 // ============================================================================
 
-export async function getDb(): Promise<IDBPDatabase<CheckatruckDB>> {
+export async function getDb(): Promise<IDBPDatabase<CheckaTruckDB>> {
   if (dbInstance) return dbInstance;
 
   try {
-    dbInstance = await openDB<CheckatruckDB>(DB_NAME, DB_VERSION, {
+    dbInstance = await openDB<CheckaTruckDB>(DB_NAME, DB_VERSION, {
       upgrade(db, oldVersion) {
         console.log(`Upgrading IndexedDB from v${oldVersion} to v${DB_VERSION}`);
 

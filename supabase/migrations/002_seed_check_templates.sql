@@ -1,5 +1,5 @@
 -- ============================================================================
--- Checkatruck Seed Data: Check Templates
+-- CheckaTruck Seed Data: Check Templates
 -- Migration: 002_seed_check_templates
 -- ============================================================================
 

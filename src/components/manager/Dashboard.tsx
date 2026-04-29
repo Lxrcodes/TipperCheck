@@ -1141,7 +1141,7 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
               <div className="flex-1">
                 <h3 className="font-bold text-amber-800">Your subscription will end on {periodEndDate}</h3>
                 <p className="text-sm text-amber-700 mt-1">
-                  After this date, all users in your organisation will lose access to Checkatruck.
+                  After this date, all users in your organisation will lose access to CheckaTruck.
                 </p>
                 <button
                   onClick={handleReactivateSubscription}
@@ -1258,7 +1258,7 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
             Contact support to delete your organisation and all associated data.
           </p>
           <a
-            href="mailto:support@checkatruck.com?subject=Account Deletion Request"
+            href="mailto:support@CheckaTruck.com?subject=Account Deletion Request"
             className="text-sm text-red-600 hover:underline"
           >
             Request Account Deletion

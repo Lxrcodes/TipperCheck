@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
-        name: 'Checkatruck',
-        short_name: 'Checkatruck',
+        name: 'CheckaTruck',
+        short_name: 'CheckaTruck',
         description: 'Vehicle Daily Check App',
         theme_color: '#f97316',
         background_color: '#0f172a',

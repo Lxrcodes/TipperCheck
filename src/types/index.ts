@@ -1,5 +1,5 @@
 // ============================================================================
-// Checkatruck Type Definitions
+// CheckaTruck Type Definitions
 // v2: Organisation → User → Vehicle → CheckRun model
 // ============================================================================
 

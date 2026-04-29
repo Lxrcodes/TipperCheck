@@ -1,4 +1,4 @@
-# Checkatruck Implementation Decisions
+# CheckaTruck Implementation Decisions
 
 ## Assumptions Made
 

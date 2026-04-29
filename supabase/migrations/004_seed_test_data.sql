@@ -1,5 +1,5 @@
 -- ============================================================================
--- Checkatruck Seed Data
+-- CheckaTruck Seed Data
 -- Migration: 004_seed_test_data
 --
 -- Creates:

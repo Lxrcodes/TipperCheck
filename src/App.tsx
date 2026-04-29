@@ -52,7 +52,7 @@ function AppContent() {
     if (billingStatus === 'success') {
       // Clear URL params and reload profile to check subscription status
       window.history.replaceState({}, '', window.location.pathname);
-      toast.showSuccess('Payment successful! Welcome to Checkatruck.');
+      toast.showSuccess('Payment successful! Welcome to CheckaTruck.');
     } else if (billingStatus === 'cancelled') {
       // Clear URL params and show error
       window.history.replaceState({}, '', window.location.pathname);
@@ -399,7 +399,7 @@ function AppContent() {
             <div className="bg-slate-900 text-white px-4 py-2 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Truck className="w-5 h-5 text-orange-500" />
-                <span className="font-bold">Checkatruck</span>
+                <span className="font-bold">CheckaTruck</span>
               </div>
               <button
                 onClick={handleSwitchToManager}
@@ -487,7 +487,7 @@ function PaymentRequired({
           Welcome back, <span className="text-white font-medium">{org.name}</span>
         </p>
         <p className="text-slate-400 mb-6">
-          Please complete your payment to start using Checkatruck.
+          Please complete your payment to start using CheckaTruck.
         </p>
 
         {error && (
@@ -572,7 +572,7 @@ function SubscriptionExpired({
           <span className="text-white font-medium">{org.name}</span>
         </p>
         <p className="text-slate-400 mb-6">
-          Your subscription has ended and access to Checkatruck has been suspended.
+          Your subscription has ended and access to CheckaTruck has been suspended.
         </p>
 
         {isBillingAdmin ? (
@@ -598,7 +598,7 @@ function SubscriptionExpired({
         ) : (
           <div className="bg-slate-800 rounded-lg p-4">
             <p className="text-slate-300 text-sm">
-              Please contact your billing administrator to restore access to Checkatruck.
+              Please contact your billing administrator to restore access to CheckaTruck.
             </p>
           </div>
         )}
@@ -632,7 +632,7 @@ function ConfigurationWarning() {
           Configuration Required
         </h1>
         <p className="text-slate-400 mb-6">
-          Checkatruck needs to be configured with your Supabase credentials.
+          CheckaTruck needs to be configured with your Supabase credentials.
         </p>
         <div className="bg-slate-800 rounded-lg p-4 text-left">
           <p className="text-sm text-slate-300 mb-2">
