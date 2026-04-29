@@ -1024,10 +1024,9 @@ interface SettingsViewProps {
 function SettingsView({ org, activeVehicleCount }: SettingsViewProps) {
   const [billingLoading, setBillingLoading] = useState(false);
 
-  // Calculate billing
-  const FREE_VEHICLES = 1;
+  // Calculate billing - all vehicles are billed at 70p/week
   const PRICE_PER_VEHICLE_WEEKLY = 0.70;
-  const billableVehicles = Math.max(0, activeVehicleCount - FREE_VEHICLES);
+  const billableVehicles = activeVehicleCount;
   const weeklyTotal = billableVehicles * PRICE_PER_VEHICLE_WEEKLY;
   const monthlyEstimate = weeklyTotal * 4.33; // Average weeks per month
 
@@ -1062,9 +1061,9 @@ function SettingsView({ org, activeVehicleCount }: SettingsViewProps) {
   };
 
   const getStatusBadge = () => {
-    // If no billable vehicles, they're on the free plan
+    // If no vehicles, show as no vehicles yet
     if (billableVehicles === 0) {
-      return <span className="px-2 py-1 text-xs font-bold rounded bg-green-100 text-green-700">Free Plan</span>;
+      return <span className="px-2 py-1 text-xs font-bold rounded bg-slate-100 text-slate-700">No Vehicles</span>;
     }
 
     switch (org.subscription_status) {
@@ -1108,11 +1107,8 @@ function SettingsView({ org, activeVehicleCount }: SettingsViewProps) {
 
           {/* Pricing Info */}
           <div className="bg-slate-50 rounded-lg p-4 mb-4">
-            <div className="text-sm text-slate-600 mb-2">
+            <div className="text-sm text-slate-600">
               <span className="font-bold text-slate-900">70p</span> per vehicle per week
-            </div>
-            <div className="text-xs text-slate-500">
-              First vehicle is always free
             </div>
           </div>
 
@@ -1122,17 +1118,9 @@ function SettingsView({ org, activeVehicleCount }: SettingsViewProps) {
               <span className="text-sm text-slate-600">Active Vehicles</span>
               <span className="font-bold text-slate-900">{activeVehicleCount}</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-600">Free Allowance</span>
-              <span className="font-bold text-green-600">-{FREE_VEHICLES}</span>
-            </div>
-            <div className="border-t border-slate-200 pt-3 flex items-center justify-between">
-              <span className="text-sm text-slate-600">Billable Vehicles</span>
-              <span className="font-bold text-slate-900">{billableVehicles}</span>
-            </div>
             {billableVehicles > 0 && (
               <>
-                <div className="flex items-center justify-between">
+                <div className="border-t border-slate-200 pt-3 flex items-center justify-between">
                   <span className="text-sm text-slate-600">Weekly Total</span>
                   <span className="font-bold text-slate-900">£{weeklyTotal.toFixed(2)}</span>
                 </div>

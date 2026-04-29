@@ -28,8 +28,8 @@ export const PRICING = {
   PRICE_PER_VEHICLE_WEEKLY: 0.70,
   // Approximately £3.03 per month (70p * 52 weeks / 12 months)
   PRICE_PER_VEHICLE_MONTHLY: 3.03,
-  // First vehicle is free
-  FREE_VEHICLES: 1,
+  // No free vehicles - all vehicles are billed
+  FREE_VEHICLES: 0,
   // Currency
   CURRENCY: 'gbp',
 };

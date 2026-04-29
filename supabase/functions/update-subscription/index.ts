@@ -49,8 +49,8 @@ serve(async (req) => {
       );
     }
 
-    // Calculate billable vehicles (first one is free)
-    const billableVehicles = Math.max(0, vehicleCount - 1);
+    // Calculate billable vehicles (all vehicles are billed)
+    const billableVehicles = vehicleCount;
 
     // Get subscription
     const subscription = await stripe.subscriptions.retrieve(org.subscription_id);

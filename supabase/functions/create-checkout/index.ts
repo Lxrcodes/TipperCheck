@@ -66,14 +66,14 @@ serve(async (req) => {
         .eq('id', orgId);
     }
 
-    // Count active vehicles (excluding first free one)
+    // Count active vehicles (all vehicles are billable)
     const { count: vehicleCount } = await supabase
       .from('vehicles')
       .select('*', { count: 'exact', head: true })
       .eq('org_id', orgId)
       .eq('status', 'active');
 
-    const billableVehicles = Math.max(0, (vehicleCount ?? 0) - 1);
+    const billableVehicles = vehicleCount ?? 0;
 
     // Create checkout session with metered billing
     const session = await stripe.checkout.sessions.create({
