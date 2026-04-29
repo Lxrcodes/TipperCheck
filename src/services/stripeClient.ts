@@ -113,3 +113,51 @@ export async function updateSubscriptionQuantity(
     return false;
   }
 }
+
+interface CancelSubscriptionResponse {
+  success: boolean;
+  cancel_at_period_end: boolean;
+  current_period_end: string;
+}
+
+/**
+ * Cancel subscription at end of billing period
+ */
+export async function cancelSubscription(orgId: string): Promise<CancelSubscriptionResponse | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke<CancelSubscriptionResponse>('cancel-subscription', {
+      body: { orgId, action: 'cancel' },
+    });
+
+    if (error) {
+      console.error('Cancel subscription error:', error);
+      return null;
+    }
+
+    return data ?? null;
+  } catch (err) {
+    console.error('Failed to cancel subscription:', err);
+    return null;
+  }
+}
+
+/**
+ * Reactivate a subscription that was set to cancel at period end
+ */
+export async function reactivateSubscription(orgId: string): Promise<CancelSubscriptionResponse | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke<CancelSubscriptionResponse>('cancel-subscription', {
+      body: { orgId, action: 'reactivate' },
+    });
+
+    if (error) {
+      console.error('Reactivate subscription error:', error);
+      return null;
+    }
+
+    return data ?? null;
+  } catch (err) {
+    console.error('Failed to reactivate subscription:', err);
+    return null;
+  }
+}

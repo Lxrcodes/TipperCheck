@@ -37,12 +37,14 @@ serve(async (req) => {
           const orgId = subscription.metadata?.org_id;
 
           if (orgId) {
-            // Update organisation with subscription ID
+            // Update organisation with subscription ID and period info
             await supabase
               .from('organisations')
               .update({
                 subscription_id: session.subscription as string,
                 subscription_status: 'active',
+                cancel_at_period_end: subscription.cancel_at_period_end,
+                current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
               })
               .eq('id', orgId);
 
@@ -63,10 +65,12 @@ serve(async (req) => {
             .from('organisations')
             .update({
               subscription_status: subscription.status as string,
+              cancel_at_period_end: subscription.cancel_at_period_end,
+              current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
             })
             .eq('id', orgId);
 
-          console.log(`Subscription updated for org ${orgId}: ${subscription.status}`);
+          console.log(`Subscription updated for org ${orgId}: ${subscription.status}, cancel_at_period_end: ${subscription.cancel_at_period_end}`);
         }
         break;
       }

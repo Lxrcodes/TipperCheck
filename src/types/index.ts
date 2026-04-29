@@ -44,6 +44,8 @@ export interface Organisation {
   stripe_customer_id: string | null;
   subscription_id: string | null;
   subscription_status: SubscriptionStatus | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
   active_vehicle_count: number;
   created_at: string;
   updated_at: string;

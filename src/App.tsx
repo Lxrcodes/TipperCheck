@@ -13,7 +13,7 @@ import { refreshTemplateCache, refreshVehicleCache } from '@/services/syncManage
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import type { AuthUser, Organisation, CheckStatus } from '@/types';
 import { isManager, isDriver } from '@/types';
-import { Loader2, AlertTriangle, Truck, CreditCard, RefreshCw, LogOut } from 'lucide-react';
+import { Loader2, AlertTriangle, Truck, CreditCard, RefreshCw, LogOut, XCircle } from 'lucide-react';
 import { createCheckoutSession } from '@/services/stripeClient';
 
 // ============================================================================
@@ -28,7 +28,7 @@ export default function App() {
   );
 }
 
-type AppView = 'loading' | 'login' | 'onboarding' | 'payment_required' | 'manager' | 'driver';
+type AppView = 'loading' | 'login' | 'onboarding' | 'payment_required' | 'subscription_expired' | 'manager' | 'driver';
 
 function AppContent() {
   const [session, setSession] = useState<Session | null>(null);
@@ -120,6 +120,23 @@ function AppContent() {
       if (orgError || !orgData) {
         console.error('Failed to load org:', orgError);
         setView('onboarding');
+        return;
+      }
+
+      // Check for canceled subscription - block all users
+      if (orgData.subscription_status === 'canceled') {
+        setOrg(orgData);
+        setAuthUser({
+          id: user.id,
+          auth_user_id: supabaseUser.id,
+          org_id: user.org_id,
+          email: user.email,
+          name: user.name,
+          roles: user.roles,
+          is_billing_admin: user.is_billing_admin,
+          is_active: user.is_active,
+        });
+        setView('subscription_expired');
         return;
       }
 
@@ -315,6 +332,29 @@ function AppContent() {
     );
   }
 
+  // Subscription Expired
+  if (view === 'subscription_expired' && org && authUser) {
+    return (
+      <SubscriptionExpired
+        org={org}
+        isBillingAdmin={authUser.is_billing_admin}
+        loading={paymentLoading}
+        onResubscribe={async () => {
+          setPaymentLoading(true);
+          try {
+            const checkoutUrl = await createCheckoutSession(org.id);
+            if (checkoutUrl) {
+              window.location.href = checkoutUrl;
+            }
+          } finally {
+            setPaymentLoading(false);
+          }
+        }}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
   // Manager Dashboard
   if (view === 'manager' && authUser && org) {
     return (
@@ -477,6 +517,81 @@ function PaymentRequired({
             )}
           </button>
         </div>
+
+        <div className="mt-8">
+          <button
+            onClick={onLogout}
+            className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Sign out</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Subscription Expired Component
+// ============================================================================
+
+interface SubscriptionExpiredProps {
+  org: Organisation;
+  isBillingAdmin: boolean;
+  loading: boolean;
+  onResubscribe: () => void;
+  onLogout: () => void;
+}
+
+function SubscriptionExpired({
+  org,
+  isBillingAdmin,
+  loading,
+  onResubscribe,
+  onLogout,
+}: SubscriptionExpiredProps) {
+  return (
+    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-md text-center">
+        <div className="inline-flex items-center justify-center w-20 h-20 bg-red-500/10 rounded-full mb-6">
+          <XCircle className="w-10 h-10 text-red-500" />
+        </div>
+        <h1 className="text-2xl font-heading text-white mb-2">Subscription Expired</h1>
+        <p className="text-slate-400 mb-2">
+          <span className="text-white font-medium">{org.name}</span>
+        </p>
+        <p className="text-slate-400 mb-6">
+          Your subscription has ended and access to TipperCheck has been suspended.
+        </p>
+
+        {isBillingAdmin ? (
+          <div className="space-y-3">
+            <p className="text-slate-400 text-sm mb-4">
+              Resubscribe now to restore access for your entire organisation.
+            </p>
+            <button
+              onClick={onResubscribe}
+              disabled={loading}
+              className="w-full py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  <CreditCard className="w-5 h-5" />
+                  Resubscribe Now
+                </>
+              )}
+            </button>
+          </div>
+        ) : (
+          <div className="bg-slate-800 rounded-lg p-4">
+            <p className="text-slate-300 text-sm">
+              Please contact your billing administrator to restore access to TipperCheck.
+            </p>
+          </div>
+        )}
 
         <div className="mt-8">
           <button

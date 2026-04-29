@@ -19,6 +19,7 @@ import {
   Mail,
   Phone,
   User as UserIcon,
+  AlertCircle,
 } from 'lucide-react';
 import type {
   AuthUser,
@@ -291,7 +292,7 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver }: DashboardPr
             {activeTab === 'defects' && (
               <DefectsView defects={openDefects} onRefresh={loadData} />
             )}
-            {activeTab === 'settings' && <SettingsView org={org} activeVehicleCount={activeVehicles.length} />}
+            {activeTab === 'settings' && <SettingsView org={org} activeVehicleCount={activeVehicles.length} onOrgUpdate={loadData} />}
           </>
         )}
       </main>
@@ -1019,16 +1020,28 @@ function DefectsView({ defects, onRefresh }: DefectsViewProps) {
 interface SettingsViewProps {
   org: Organisation;
   activeVehicleCount: number;
+  onOrgUpdate: () => void;
 }
 
-function SettingsView({ org, activeVehicleCount }: SettingsViewProps) {
+function SettingsView({ org, activeVehicleCount, onOrgUpdate }: SettingsViewProps) {
   const [billingLoading, setBillingLoading] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [reactivateLoading, setReactivateLoading] = useState(false);
 
   // Calculate billing - all vehicles are billed at 70p/week
   const PRICE_PER_VEHICLE_WEEKLY = 0.70;
   const billableVehicles = activeVehicleCount;
   const weeklyTotal = billableVehicles * PRICE_PER_VEHICLE_WEEKLY;
   const monthlyEstimate = weeklyTotal * 4.33; // Average weeks per month
+
+  const periodEndDate = org.current_period_end
+    ? new Date(org.current_period_end).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })
+    : null;
 
   const handleSetupBilling = async () => {
     setBillingLoading(true);
@@ -1060,10 +1073,46 @@ function SettingsView({ org, activeVehicleCount }: SettingsViewProps) {
     }
   };
 
+  const handleCancelSubscription = async () => {
+    setCancelLoading(true);
+    try {
+      const { cancelSubscription } = await import('@/services/stripeClient');
+      const result = await cancelSubscription(org.id);
+      if (result?.success) {
+        setShowCancelModal(false);
+        onOrgUpdate();
+      }
+    } catch (err) {
+      console.error('Failed to cancel subscription:', err);
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
+  const handleReactivateSubscription = async () => {
+    setReactivateLoading(true);
+    try {
+      const { reactivateSubscription } = await import('@/services/stripeClient');
+      const result = await reactivateSubscription(org.id);
+      if (result?.success) {
+        onOrgUpdate();
+      }
+    } catch (err) {
+      console.error('Failed to reactivate subscription:', err);
+    } finally {
+      setReactivateLoading(false);
+    }
+  };
+
   const getStatusBadge = () => {
     // If no vehicles, show as no vehicles yet
     if (billableVehicles === 0) {
       return <span className="px-2 py-1 text-xs font-bold rounded bg-slate-100 text-slate-700">No Vehicles</span>;
+    }
+
+    // Check if subscription is set to cancel at period end
+    if (org.cancel_at_period_end && org.subscription_status === 'active') {
+      return <span className="px-2 py-1 text-xs font-bold rounded bg-amber-100 text-amber-700">Cancelling</span>;
     }
 
     switch (org.subscription_status) {
@@ -1083,6 +1132,31 @@ function SettingsView({ org, activeVehicleCount }: SettingsViewProps) {
       <h1 className="text-xl md:text-2xl font-heading text-slate-900 mb-6">Settings</h1>
 
       <div className="max-w-2xl space-y-6">
+        {/* Cancellation Warning Banner */}
+        {org.cancel_at_period_end && org.subscription_status === 'active' && periodEndDate && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-bold text-amber-800">Your subscription will end on {periodEndDate}</h3>
+                <p className="text-sm text-amber-700 mt-1">
+                  After this date, all users in your organisation will lose access to TipperCheck.
+                </p>
+                <button
+                  onClick={handleReactivateSubscription}
+                  disabled={reactivateLoading}
+                  className="mt-3 px-4 py-2 bg-amber-600 text-white font-bold rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors inline-flex items-center gap-2"
+                >
+                  {reactivateLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : null}
+                  Keep My Subscription
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Organisation Info */}
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h2 className="text-lg font-bold text-slate-900 mb-4">Organisation</h2>
@@ -1162,6 +1236,18 @@ function SettingsView({ org, activeVehicleCount }: SettingsViewProps) {
               No payment required - you're on the free plan
             </div>
           )}
+
+          {/* Cancel subscription link */}
+          {org.subscription_id && org.subscription_status === 'active' && !org.cancel_at_period_end && (
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => setShowCancelModal(true)}
+                className="text-sm text-red-600 hover:text-red-700 hover:underline"
+              >
+                Cancel subscription
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Danger Zone */}
@@ -1178,6 +1264,51 @@ function SettingsView({ org, activeVehicleCount }: SettingsViewProps) {
           </a>
         </div>
       </div>
+
+      {/* Cancel Subscription Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold text-slate-900 mb-4">Cancel Subscription?</h2>
+            <div className="space-y-3 mb-6">
+              <p className="text-slate-600">
+                Your subscription will remain active until <span className="font-bold">{periodEndDate || 'the end of your billing period'}</span>.
+              </p>
+              <p className="text-slate-600">
+                After that date:
+              </p>
+              <ul className="list-disc list-inside text-slate-600 space-y-1">
+                <li>All users in your organisation will lose access</li>
+                <li>Drivers won't be able to submit vehicle checks</li>
+                <li>Your data will be retained for 30 days</li>
+              </ul>
+              <p className="text-sm text-slate-500">
+                You can reactivate your subscription at any time before it ends.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCancelModal(false)}
+                disabled={cancelLoading}
+                className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors"
+              >
+                Keep Subscription
+              </button>
+              <button
+                onClick={handleCancelSubscription}
+                disabled={cancelLoading}
+                className="flex-1 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+              >
+                {cancelLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  'Cancel Subscription'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
