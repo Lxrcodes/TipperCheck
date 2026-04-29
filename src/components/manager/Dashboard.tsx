@@ -1062,17 +1062,20 @@ function SettingsView({ org, activeVehicleCount }: SettingsViewProps) {
   };
 
   const getStatusBadge = () => {
+    // If no billable vehicles, they're on the free plan
+    if (billableVehicles === 0) {
+      return <span className="px-2 py-1 text-xs font-bold rounded bg-green-100 text-green-700">Free Plan</span>;
+    }
+
     switch (org.subscription_status) {
       case 'active':
         return <span className="px-2 py-1 text-xs font-bold rounded bg-green-100 text-green-700">Active</span>;
-      case 'trialing':
-        return <span className="px-2 py-1 text-xs font-bold rounded bg-blue-100 text-blue-700">Free Trial</span>;
       case 'past_due':
         return <span className="px-2 py-1 text-xs font-bold rounded bg-red-100 text-red-700">Past Due</span>;
       case 'canceled':
         return <span className="px-2 py-1 text-xs font-bold rounded bg-slate-100 text-slate-700">Cancelled</span>;
       default:
-        return <span className="px-2 py-1 text-xs font-bold rounded bg-slate-100 text-slate-700">No Plan</span>;
+        return <span className="px-2 py-1 text-xs font-bold rounded bg-amber-100 text-amber-700">Payment Required</span>;
     }
   };
 

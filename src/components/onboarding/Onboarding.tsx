@@ -78,7 +78,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
           name: orgName.trim(),
           contact_email: email,
           contact_phone: userPhone || null,
-          subscription_status: 'trialing',
+          subscription_status: null,
         });
 
       if (orgError) throw orgError;
