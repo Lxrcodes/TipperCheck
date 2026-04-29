@@ -20,6 +20,10 @@ import {
   Phone,
   User as UserIcon,
   AlertCircle,
+  Eye,
+  EyeOff,
+  Check,
+  Lock,
 } from 'lucide-react';
 import type {
   AuthUser,
@@ -1030,6 +1034,15 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
   const [cancelLoading, setCancelLoading] = useState(false);
   const [reactivateLoading, setReactivateLoading] = useState(false);
 
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPasswords, setShowPasswords] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+
   // Calculate billing - all vehicles are billed at 70p/week
   const PRICE_PER_VEHICLE_WEEKLY = 0.70;
   const billableVehicles = activeVehicleCount;
@@ -1071,6 +1084,59 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
       console.error('Failed to create portal session:', err);
     } finally {
       setBillingLoading(false);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(false);
+
+    if (newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    setPasswordLoading(true);
+
+    try {
+      // First verify current password by signing in
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) throw new Error('No user found');
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+
+      if (signInError) {
+        setPasswordError('Current password is incorrect');
+        return;
+      }
+
+      // Update to new password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (updateError) throw updateError;
+
+      // Clear form and show success
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordSuccess(true);
+      setTimeout(() => setPasswordSuccess(false), 3000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to change password';
+      setPasswordError(message);
+    } finally {
+      setPasswordLoading(false);
     }
   };
 
@@ -1171,6 +1237,87 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
               <div className="text-slate-900">{org.contact_email || '-'}</div>
             </div>
           </div>
+        </div>
+
+        {/* Change Password */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h2 className="text-lg font-bold text-slate-900 mb-4">Change Password</h2>
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            {passwordError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-600">{passwordError}</p>
+              </div>
+            )}
+            {passwordSuccess && (
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+                <Check className="w-4 h-4 text-green-600" />
+                <p className="text-sm text-green-600">Password changed successfully</p>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-500 uppercase">Current Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type={showPasswords ? 'text' : 'password'}
+                  required
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="w-full pl-10 pr-10 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPasswords(!showPasswords)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showPasswords ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-500 uppercase">New Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type={showPasswords ? 'text' : 'password'}
+                  required
+                  minLength={8}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                  placeholder="Min 8 characters"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-500 uppercase">Confirm New Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type={showPasswords ? 'text' : 'password'}
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={passwordLoading}
+              className="w-full py-2 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+            >
+              {passwordLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                'Change Password'
+              )}
+            </button>
+          </form>
         </div>
 
         {/* Billing Section */}
