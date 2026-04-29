@@ -13,7 +13,8 @@ import { refreshTemplateCache, refreshVehicleCache } from '@/services/syncManage
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import type { AuthUser, Organisation, CheckStatus } from '@/types';
 import { isManager, isDriver } from '@/types';
-import { Loader2, AlertTriangle, Truck } from 'lucide-react';
+import { Loader2, AlertTriangle, Truck, CreditCard, RefreshCw, LogOut } from 'lucide-react';
+import { createCheckoutSession } from '@/services/stripeClient';
 
 // ============================================================================
 // App Component
@@ -27,7 +28,7 @@ export default function App() {
   );
 }
 
-type AppView = 'loading' | 'login' | 'onboarding' | 'manager' | 'driver';
+type AppView = 'loading' | 'login' | 'onboarding' | 'payment_required' | 'manager' | 'driver';
 
 function AppContent() {
   const [session, setSession] = useState<Session | null>(null);
@@ -35,10 +36,29 @@ function AppContent() {
   const [org, setOrg] = useState<Organisation | null>(null);
   const [view, setView] = useState<AppView>('loading');
   const [preferredView, setPreferredView] = useState<'manager' | 'driver' | null>(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [verifyingPayment, setVerifyingPayment] = useState(false);
 
   const offline = useOffline();
   const toast = useToast();
   const location = useLocation();
+
+  // Handle billing return URL params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const billingStatus = params.get('billing');
+
+    if (billingStatus === 'success') {
+      // Clear URL params and reload profile to check subscription status
+      window.history.replaceState({}, '', window.location.pathname);
+      toast.showSuccess('Payment successful! Welcome to TipperCheck.');
+    } else if (billingStatus === 'cancelled') {
+      // Clear URL params and show error
+      window.history.replaceState({}, '', window.location.pathname);
+      setPaymentError('Payment was cancelled. Please complete payment to continue.');
+    }
+  }, []);
 
   // Check for existing session
   useEffect(() => {
@@ -101,6 +121,34 @@ function AppContent() {
         console.error('Failed to load org:', orgError);
         setView('onboarding');
         return;
+      }
+
+      // Check for incomplete payment (has org but no active subscription)
+      // Only check if user is billing admin (the one who needs to pay)
+      if (user.is_billing_admin && !orgData.subscription_status) {
+        // Check if there are any active vehicles (meaning they started onboarding)
+        const { count: vehicleCount } = await supabase
+          .from('vehicles')
+          .select('*', { count: 'exact', head: true })
+          .eq('org_id', user.org_id)
+          .eq('status', 'active');
+
+        if (vehicleCount && vehicleCount > 0) {
+          // Has vehicles but no subscription - needs to complete payment
+          setOrg(orgData);
+          setAuthUser({
+            id: user.id,
+            auth_user_id: supabaseUser.id,
+            org_id: user.org_id,
+            email: user.email,
+            name: user.name,
+            roles: user.roles,
+            is_billing_admin: user.is_billing_admin,
+            is_active: user.is_active,
+          });
+          setView('payment_required');
+          return;
+        }
       }
 
       // Set auth user
@@ -226,6 +274,47 @@ function AppContent() {
     );
   }
 
+  // Payment Required
+  if (view === 'payment_required' && org) {
+    return (
+      <PaymentRequired
+        org={org}
+        loading={paymentLoading}
+        error={paymentError}
+        verifying={verifyingPayment}
+        onRetryPayment={async () => {
+          setPaymentLoading(true);
+          setPaymentError(null);
+          try {
+            const checkoutUrl = await createCheckoutSession(org.id);
+            if (checkoutUrl) {
+              window.location.href = checkoutUrl;
+            } else {
+              setPaymentError('Failed to create checkout session. Please try again.');
+            }
+          } catch (err) {
+            setPaymentError('Failed to start payment. Please try again.');
+          } finally {
+            setPaymentLoading(false);
+          }
+        }}
+        onVerifyPayment={async () => {
+          setVerifyingPayment(true);
+          setPaymentError(null);
+          try {
+            // Reload the profile to check subscription status
+            if (session?.user) {
+              await loadUserProfile(session.user);
+            }
+          } finally {
+            setVerifyingPayment(false);
+          }
+        }}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
   // Manager Dashboard
   if (view === 'manager' && authUser && org) {
     return (
@@ -311,6 +400,95 @@ function DriverHome({ user, org, onCheckComplete }: DriverHomeProps) {
       orgId={org.id}
       onComplete={onCheckComplete}
     />
+  );
+}
+
+// ============================================================================
+// Payment Required Component
+// ============================================================================
+
+interface PaymentRequiredProps {
+  org: Organisation;
+  loading: boolean;
+  error: string | null;
+  verifying: boolean;
+  onRetryPayment: () => void;
+  onVerifyPayment: () => void;
+  onLogout: () => void;
+}
+
+function PaymentRequired({
+  org,
+  loading,
+  error,
+  verifying,
+  onRetryPayment,
+  onVerifyPayment,
+  onLogout,
+}: PaymentRequiredProps) {
+  return (
+    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-md text-center">
+        <div className="inline-flex items-center justify-center w-20 h-20 bg-orange-500/10 rounded-full mb-6">
+          <CreditCard className="w-10 h-10 text-orange-500" />
+        </div>
+        <h1 className="text-2xl font-heading text-white mb-2">Complete Your Subscription</h1>
+        <p className="text-slate-400 mb-2">
+          Welcome back, <span className="text-white font-medium">{org.name}</span>
+        </p>
+        <p className="text-slate-400 mb-6">
+          Please complete your payment to start using TipperCheck.
+        </p>
+
+        {error && (
+          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg mb-6">
+            <p className="text-sm text-red-400">{error}</p>
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <button
+            onClick={onRetryPayment}
+            disabled={loading || verifying}
+            className="w-full py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <>
+                <CreditCard className="w-5 h-5" />
+                Complete Payment
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={onVerifyPayment}
+            disabled={loading || verifying}
+            className="w-full py-3 bg-slate-700 text-white font-medium rounded-lg hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+          >
+            {verifying ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <>
+                <RefreshCw className="w-5 h-5" />
+                Already Paid? Refresh Status
+              </>
+            )}
+          </button>
+        </div>
+
+        <div className="mt-8">
+          <button
+            onClick={onLogout}
+            className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Sign out</span>
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

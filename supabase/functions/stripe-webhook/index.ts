@@ -29,19 +29,27 @@ serve(async (req) => {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
-        const orgId = session.metadata?.org_id || session.subscription_data?.metadata?.org_id;
 
-        if (orgId && session.subscription) {
-          // Update organisation with subscription ID
-          await supabase
-            .from('organisations')
-            .update({
-              subscription_id: session.subscription as string,
-              subscription_status: 'active',
-            })
-            .eq('id', orgId);
+        // The org_id is in the subscription metadata, not session metadata
+        // We need to retrieve the subscription to get it
+        if (session.subscription) {
+          const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+          const orgId = subscription.metadata?.org_id;
 
-          console.log(`Subscription created for org ${orgId}`);
+          if (orgId) {
+            // Update organisation with subscription ID
+            await supabase
+              .from('organisations')
+              .update({
+                subscription_id: session.subscription as string,
+                subscription_status: 'active',
+              })
+              .eq('id', orgId);
+
+            console.log(`Subscription created for org ${orgId}`);
+          } else {
+            console.log('No org_id found in subscription metadata');
+          }
         }
         break;
       }
