@@ -48,9 +48,10 @@ interface DashboardProps {
   org: Organisation;
   onLogout: () => void;
   onSwitchToDriver: () => void;
+  onOrgReload: () => Promise<void>;
 }
 
-export function Dashboard({ user, org, onLogout, onSwitchToDriver }: DashboardProps) {
+export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<DashboardTab>('today');
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -292,7 +293,7 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver }: DashboardPr
             {activeTab === 'defects' && (
               <DefectsView defects={openDefects} onRefresh={loadData} />
             )}
-            {activeTab === 'settings' && <SettingsView org={org} activeVehicleCount={activeVehicles.length} onOrgUpdate={loadData} />}
+            {activeTab === 'settings' && <SettingsView org={org} activeVehicleCount={activeVehicles.length} onOrgReload={onOrgReload} />}
           </>
         )}
       </main>
@@ -1020,10 +1021,10 @@ function DefectsView({ defects, onRefresh }: DefectsViewProps) {
 interface SettingsViewProps {
   org: Organisation;
   activeVehicleCount: number;
-  onOrgUpdate: () => void;
+  onOrgReload: () => Promise<void>;
 }
 
-function SettingsView({ org, activeVehicleCount, onOrgUpdate }: SettingsViewProps) {
+function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProps) {
   const [billingLoading, setBillingLoading] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
@@ -1080,7 +1081,7 @@ function SettingsView({ org, activeVehicleCount, onOrgUpdate }: SettingsViewProp
       const result = await cancelSubscription(org.id);
       if (result?.success) {
         setShowCancelModal(false);
-        onOrgUpdate();
+        await onOrgReload();
       }
     } catch (err) {
       console.error('Failed to cancel subscription:', err);
@@ -1095,7 +1096,7 @@ function SettingsView({ org, activeVehicleCount, onOrgUpdate }: SettingsViewProp
       const { reactivateSubscription } = await import('@/services/stripeClient');
       const result = await reactivateSubscription(org.id);
       if (result?.success) {
-        onOrgUpdate();
+        await onOrgReload();
       }
     } catch (err) {
       console.error('Failed to reactivate subscription:', err);

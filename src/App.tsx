@@ -363,6 +363,16 @@ function AppContent() {
         org={org}
         onLogout={handleLogout}
         onSwitchToDriver={handleSwitchToDriver}
+        onOrgReload={async () => {
+          const { data: orgData } = await supabase
+            .from('organisations')
+            .select('*')
+            .eq('id', authUser.org_id)
+            .single();
+          if (orgData) {
+            setOrg(orgData);
+          }
+        }}
       />
     );
   }
