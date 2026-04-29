@@ -1043,6 +1043,12 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
+  // Delete account state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   // Calculate billing - all vehicles are billed at 70p/week
   const PRICE_PER_VEHICLE_WEEKLY = 0.70;
   const billableVehicles = activeVehicleCount;
@@ -1137,6 +1143,49 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
       setPasswordError(message);
     } finally {
       setPasswordLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'DELETE') return;
+
+    setDeleteLoading(true);
+    setDeleteError(null);
+
+    try {
+      // Cancel subscription if active
+      if (org.subscription_id && org.subscription_status === 'active' && !org.cancel_at_period_end) {
+        const { cancelSubscription } = await import('@/services/stripeClient');
+        await cancelSubscription(org.id);
+      }
+
+      // Deactivate all users in the organisation
+      const { error: usersError } = await supabase
+        .from('users')
+        .update({ is_active: false, deactivated_at: new Date().toISOString() })
+        .eq('org_id', org.id);
+
+      if (usersError) throw usersError;
+
+      // Mark organisation as deleted (soft delete)
+      const { error: orgError } = await supabase
+        .from('organisations')
+        .update({
+          subscription_status: 'canceled',
+          name: `[DELETED] ${org.name}`,
+        })
+        .eq('id', org.id);
+
+      if (orgError) throw orgError;
+
+      // Sign out the user
+      await supabase.auth.signOut();
+      window.location.href = '/';
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete account';
+      setDeleteError(message);
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -1286,9 +1335,16 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
                   minLength={8}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                  className="w-full pl-10 pr-10 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                   placeholder="Min 8 characters"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPasswords(!showPasswords)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showPasswords ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
@@ -1301,8 +1357,15 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                  className="w-full pl-10 pr-10 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPasswords(!showPasswords)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showPasswords ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
@@ -1402,16 +1465,79 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
         <div className="bg-white rounded-lg shadow-sm p-6 border border-red-200">
           <h2 className="text-lg font-bold text-red-600 mb-4">Danger Zone</h2>
           <p className="text-sm text-slate-600 mb-4">
-            Contact support to delete your organisation and all associated data.
+            Permanently delete your organisation and all associated data. This action cannot be undone.
           </p>
-          <a
-            href="mailto:support@CheckaTruck.com?subject=Account Deletion Request"
-            className="text-sm text-red-600 hover:underline"
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors"
           >
-            Request Account Deletion
-          </a>
+            Delete Organisation
+          </button>
         </div>
       </div>
+
+      {/* Delete Account Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold text-red-600 mb-4">Delete Organisation?</h2>
+            <div className="space-y-3 mb-6">
+              <p className="text-slate-600">
+                This will permanently delete <span className="font-bold">{org.name}</span> and all associated data:
+              </p>
+              <ul className="list-disc list-inside text-slate-600 space-y-1">
+                <li>All user accounts will be deactivated</li>
+                <li>All vehicle check history will be deleted</li>
+                <li>Your subscription will be cancelled immediately</li>
+              </ul>
+              <p className="text-sm text-red-600 font-bold">
+                This action cannot be undone.
+              </p>
+              {deleteError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-600">{deleteError}</p>
+                </div>
+              )}
+              <div className="pt-2">
+                <label className="text-sm text-slate-600 block mb-2">
+                  Type <span className="font-mono font-bold bg-slate-100 px-1">DELETE</span> to confirm:
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+                  placeholder="DELETE"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteConfirmText('');
+                  setDeleteError(null);
+                }}
+                disabled={deleteLoading}
+                className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteLoading || deleteConfirmText !== 'DELETE'}
+                className="flex-1 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {deleteLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  'Delete Forever'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Cancel Subscription Modal */}
       {showCancelModal && (
