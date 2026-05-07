@@ -24,6 +24,9 @@ import {
   EyeOff,
   Check,
   Lock,
+  History,
+  Calendar,
+  FileText,
 } from 'lucide-react';
 import type {
   AuthUser,
@@ -45,7 +48,7 @@ import {
 import { VehicleModal } from './VehicleModal';
 import { UserModal } from './UserModal';
 
-type DashboardTab = 'today' | 'vehicles' | 'team' | 'defects' | 'settings';
+type DashboardTab = 'today' | 'history' | 'vehicles' | 'team' | 'defects' | 'settings';
 
 interface DashboardProps {
   user: AuthUser;
@@ -203,6 +206,12 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
             badge={uncheckedVehicles.length > 0 ? uncheckedVehicles.length : undefined}
           />
           <NavItem
+            icon={History}
+            label="History"
+            active={activeTab === 'history'}
+            onClick={() => handleTabChange('history')}
+          />
+          <NavItem
             icon={Truck}
             label="Vehicles"
             active={activeTab === 'vehicles'}
@@ -265,6 +274,13 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
                 vehicles={vehicles}
                 checks={todayChecks}
                 defects={openDefects}
+              />
+            )}
+            {activeTab === 'history' && (
+              <HistoryView
+                orgId={org.id}
+                vehicles={vehicles}
+                users={users}
               />
             )}
             {activeTab === 'vehicles' && (
@@ -915,6 +931,428 @@ function TeamView({ users, currentUserId, onAdd, onEdit }: TeamViewProps) {
                       >
                         Edit Profile
                       </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// HistoryView Component
+// ============================================================================
+
+interface HistoryViewProps {
+  orgId: string;
+  vehicles: Vehicle[];
+  users: User[];
+}
+
+function HistoryView({ orgId, vehicles, users }: HistoryViewProps) {
+  const [checks, setChecks] = useState<CheckRun[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [vehicleFilter, setVehicleFilter] = useState<string>('all');
+  const [driverFilter, setDriverFilter] = useState<string>('all');
+  const [dateFilter, setDateFilter] = useState<string>('7');
+  const [expandedCheckId, setExpandedCheckId] = useState<string | null>(null);
+
+  // Load checks on mount and when filters change
+  useEffect(() => {
+    loadChecks();
+  }, [orgId, dateFilter]);
+
+  const loadChecks = async () => {
+    setLoading(true);
+    try {
+      let query = supabase
+        .from('check_runs')
+        .select('*')
+        .eq('org_id', orgId)
+        .order('completed_at', { ascending: false });
+
+      // Apply date filter
+      if (dateFilter !== 'all') {
+        const daysAgo = parseInt(dateFilter);
+        const fromDate = new Date();
+        fromDate.setDate(fromDate.getDate() - daysAgo);
+        query = query.gte('check_date', fromDate.toISOString().split('T')[0]);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      setChecks(data || []);
+    } catch (err) {
+      console.error('Failed to load check history:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Filter checks
+  const filteredChecks = checks.filter((check) => {
+    // Vehicle filter
+    if (vehicleFilter !== 'all' && check.vehicle_id !== vehicleFilter) {
+      return false;
+    }
+
+    // Driver filter
+    if (driverFilter !== 'all' && check.user_id !== driverFilter) {
+      return false;
+    }
+
+    // Search filter
+    if (search) {
+      const searchLower = search.toLowerCase();
+      const matchesReg = check.vehicle_registration?.toLowerCase().includes(searchLower);
+      const matchesDriver = check.driver_name?.toLowerCase().includes(searchLower);
+      if (!matchesReg && !matchesDriver) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  const toggleExpand = (checkId: string) => {
+    setExpandedCheckId(expandedCheckId === checkId ? null : checkId);
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pass':
+        return 'bg-green-100 text-green-700';
+      case 'defects':
+        return 'bg-amber-100 text-amber-700';
+      case 'do_not_drive':
+        return 'bg-red-100 text-red-700';
+      default:
+        return 'bg-slate-100 text-slate-700';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pass':
+        return 'Pass';
+      case 'defects':
+        return 'Defects';
+      case 'do_not_drive':
+        return 'Do Not Drive';
+      default:
+        return status;
+    }
+  };
+
+  const formatDuration = (startedAt: string, completedAt: string) => {
+    const start = new Date(startedAt);
+    const end = new Date(completedAt);
+    const diffMs = end.getTime() - start.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffSecs = Math.floor((diffMs % 60000) / 1000);
+    return `${diffMins}m ${diffSecs}s`;
+  };
+
+  // Get unique drivers from checks
+  const driversInChecks = Array.from(
+    new Map(
+      checks
+        .filter((c) => c.user_id && c.driver_name)
+        .map((c) => [c.user_id, { id: c.user_id, name: c.driver_name }])
+    ).values()
+  );
+
+  return (
+    <div className="p-4 md:p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl md:text-2xl font-heading text-slate-900">Check History</h1>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search registration or driver..."
+              className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none bg-white text-sm"
+            />
+          </div>
+
+          {/* Date Filter */}
+          <div className="flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-slate-400 flex-shrink-0" />
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none bg-white text-sm"
+            >
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="all">All time</option>
+            </select>
+          </div>
+
+          {/* Vehicle Filter */}
+          <select
+            value={vehicleFilter}
+            onChange={(e) => setVehicleFilter(e.target.value)}
+            className="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none bg-white text-sm"
+          >
+            <option value="all">All Vehicles</option>
+            {vehicles.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.registration}
+              </option>
+            ))}
+          </select>
+
+          {/* Driver Filter */}
+          <select
+            value={driverFilter}
+            onChange={(e) => setDriverFilter(e.target.value)}
+            className="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none bg-white text-sm"
+          >
+            <option value="all">All Drivers</option>
+            {driversInChecks.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Results */}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+        </div>
+      ) : filteredChecks.length === 0 ? (
+        <div className="bg-white rounded-lg p-12 text-center">
+          <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <p className="text-slate-600">
+            {search || vehicleFilter !== 'all' || driverFilter !== 'all'
+              ? 'No checks match your filters'
+              : 'No checks recorded yet'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {/* Summary */}
+          <div className="text-sm text-slate-500 mb-2">
+            Showing {filteredChecks.length} check{filteredChecks.length !== 1 ? 's' : ''}
+          </div>
+
+          {filteredChecks.map((check) => {
+            const isExpanded = expandedCheckId === check.id;
+
+            return (
+              <div
+                key={check.id}
+                className="bg-white rounded-lg shadow-sm overflow-hidden"
+              >
+                {/* Check Header - Always visible */}
+                <button
+                  onClick={() => toggleExpand(check.id)}
+                  className="w-full p-4 flex items-center gap-3 text-left hover:bg-slate-50 transition-colors"
+                >
+                  {/* Status indicator */}
+                  <div
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      check.overall_status === 'pass'
+                        ? 'bg-green-100'
+                        : check.overall_status === 'defects'
+                        ? 'bg-amber-100'
+                        : 'bg-red-100'
+                    }`}
+                  >
+                    {check.overall_status === 'pass' ? (
+                      <CheckCircle2 className="w-5 h-5 text-green-600" />
+                    ) : check.overall_status === 'defects' ? (
+                      <AlertTriangle className="w-5 h-5 text-amber-600" />
+                    ) : (
+                      <XCircle className="w-5 h-5 text-red-600" />
+                    )}
+                  </div>
+
+                  {/* Main info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono font-bold text-slate-900">
+                        {check.vehicle_registration}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 text-xs font-bold rounded ${getStatusColor(
+                          check.overall_status
+                        )}`}
+                      >
+                        {getStatusLabel(check.overall_status)}
+                      </span>
+                    </div>
+                    <div className="text-sm text-slate-500 mt-0.5">
+                      {check.driver_name} •{' '}
+                      {new Date(check.check_date).toLocaleDateString('en-GB', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Time */}
+                  <div className="text-right flex-shrink-0 hidden sm:block">
+                    <div className="text-sm font-medium text-slate-900">
+                      {new Date(check.completed_at).toLocaleTimeString('en-GB', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      {formatDuration(check.started_at, check.completed_at)}
+                    </div>
+                  </div>
+
+                  {/* Expand indicator */}
+                  <ChevronRight
+                    className={`w-5 h-5 text-slate-400 transition-transform flex-shrink-0 ${
+                      isExpanded ? 'rotate-90' : ''
+                    }`}
+                  />
+                </button>
+
+                {/* Expanded Details */}
+                {isExpanded && (
+                  <div className="px-4 pb-4 border-t border-slate-100">
+                    <div className="pt-3 space-y-3">
+                      {/* Check Details */}
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <span className="text-slate-500">Vehicle</span>
+                          <div className="font-medium text-slate-900">
+                            {check.vehicle_registration}
+                          </div>
+                          <div className="text-xs text-slate-400">{check.vehicle_type}</div>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Driver</span>
+                          <div className="font-medium text-slate-900">{check.driver_name}</div>
+                          <div className="text-xs text-slate-400">{check.driver_email}</div>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Started</span>
+                          <div className="font-medium text-slate-900">
+                            {new Date(check.started_at).toLocaleTimeString('en-GB', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Completed</span>
+                          <div className="font-medium text-slate-900">
+                            {new Date(check.completed_at).toLocaleTimeString('en-GB', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Duration</span>
+                          <div className="font-medium text-slate-900">
+                            {formatDuration(check.started_at, check.completed_at)}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Template</span>
+                          <div className="font-medium text-slate-900">
+                            {check.template_name || 'Standard Check'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Location */}
+                      {check.gps_start && (
+                        <div className="text-sm">
+                          <span className="text-slate-500">Location</span>
+                          <div className="text-slate-700">
+                            {check.location_address ||
+                              `${check.gps_start.lat.toFixed(4)}, ${check.gps_start.lng.toFixed(4)}`}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Results Summary */}
+                      {check.results && check.results.length > 0 && (
+                        <div className="text-sm">
+                          <span className="text-slate-500">Results Summary</span>
+                          <div className="flex gap-3 mt-1">
+                            <span className="text-green-600">
+                              {check.results.filter((r: { status: string }) => r.status === 'pass').length} Pass
+                            </span>
+                            <span className="text-red-600">
+                              {check.results.filter((r: { status: string }) => r.status === 'fail').length} Fail
+                            </span>
+                            <span className="text-slate-400">
+                              {check.results.filter((r: { status: string }) => r.status === 'na').length} N/A
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Notes */}
+                      {(check.defect_repair_notes || check.head_office_notes) && (
+                        <div className="space-y-2">
+                          {check.defect_repair_notes && (
+                            <div className="text-sm">
+                              <span className="text-slate-500">Repair Notes</span>
+                              <p className="text-slate-700 bg-slate-50 p-2 rounded mt-1">
+                                {check.defect_repair_notes}
+                              </p>
+                            </div>
+                          )}
+                          {check.head_office_notes && (
+                            <div className="text-sm">
+                              <span className="text-slate-500">Head Office Notes</span>
+                              <p className="text-slate-700 bg-slate-50 p-2 rounded mt-1">
+                                {check.head_office_notes}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Confirmations */}
+                      <div className="flex gap-4 text-sm">
+                        <div className="flex items-center gap-1">
+                          {check.vehicle_fit_confirmed ? (
+                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-red-500" />
+                          )}
+                          <span className="text-slate-600">Vehicle Fit</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {check.driver_fit_confirmed ? (
+                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-red-500" />
+                          )}
+                          <span className="text-slate-600">Driver Fit</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}

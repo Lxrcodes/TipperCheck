@@ -13,6 +13,8 @@ import {
   XCircle,
   HelpCircle,
   Clock,
+  Fuel,
+  AlertCircle,
 } from 'lucide-react';
 import {
   savePendingCheck,
@@ -34,7 +36,10 @@ import type {
   CheckStatus,
   PendingCheck,
   GpsCoordinates,
+  FuelLevel,
+  CheckInputType,
 } from '@/types';
+import { FUEL_LEVELS } from '@/types';
 
 // ============================================================================
 // Types
@@ -45,6 +50,8 @@ type WizardStep =
   | 'intro'
   | 'reg_photo'
   | 'category'
+  | 'notes'
+  | 'confirmations'
   | 'summary'
   | 'signature'
   | 'complete';
@@ -80,6 +87,14 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
   const [defectPhotos, setDefectPhotos] = useState<string[]>([]);
   const [regPhoto, setRegPhoto] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Notes
+  const [defectRepairNotes, setDefectRepairNotes] = useState('');
+  const [headOfficeNotes, setHeadOfficeNotes] = useState('');
+
+  // Confirmations
+  const [vehicleFitConfirmed, setVehicleFitConfirmed] = useState(false);
+  const [driverFitConfirmed, setDriverFitConfirmed] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const regPhotoInputRef = useRef<HTMLInputElement>(null);
@@ -246,23 +261,36 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
     );
   };
 
-  const handleItemResult = (item: CheckItem, status: CheckResult) => {
+  const handleItemResult = (item: CheckItem, status: CheckResult, fuelLevel?: FuelLevel) => {
     const existing = results.get(item.id);
     const result: CheckItemResult = {
       item_id: item.id,
       status,
+      fuel_level: fuelLevel,
       note: existing?.note ?? null,
       photo_urls: existing?.photo_urls ?? [],
     };
 
     setResults(new Map(results.set(item.id, result)));
 
-    // If fail and photo required, open defect capture
-    if (status === 'fail') {
+    // If fail and not already a fail, open defect capture
+    if (status === 'fail' && existing?.status !== 'fail') {
       setActiveDefectItem(item);
       setDefectNote('');
       setDefectPhotos([]);
     }
+  };
+
+  const handleFuelLevelSelect = (item: CheckItem, level: FuelLevel) => {
+    const existing = results.get(item.id);
+    const result: CheckItemResult = {
+      item_id: item.id,
+      status: 'pass',
+      fuel_level: level,
+      note: existing?.note ?? null,
+      photo_urls: existing?.photo_urls ?? [],
+    };
+    setResults(new Map(results.set(item.id, result)));
   };
 
   const handleDefectCapture = () => {
@@ -296,7 +324,13 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
     if (currentCategoryIndex < totalCategories - 1) {
       setCurrentCategoryIndex((prev) => prev + 1);
     } else {
-      setStep('summary');
+      // Check if there are any defects to show notes step
+      const hasDefects = Array.from(results.values()).some((r) => r.status === 'fail');
+      if (hasDefects) {
+        setStep('notes');
+      } else {
+        setStep('confirmations');
+      }
     }
     // Save draft
     saveDraftProgress();
@@ -328,7 +362,8 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
       const item = selectedTemplate?.categories
         .flatMap((c) => c.items)
         .find((i) => i.id === r.item_id);
-      return item?.severity === 'critical';
+      // Support both new is_critical field and legacy severity field
+      return item?.is_critical || item?.severity === 'critical';
     });
 
     if (hasCriticalFail) return 'do_not_drive';
@@ -392,6 +427,12 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
         gps_end: gpsEnd,
         results: Array.from(results.values()),
         overall_status: overallStatus,
+        // Notes
+        defect_repair_notes: defectRepairNotes || null,
+        head_office_notes: headOfficeNotes || null,
+        // Confirmations
+        vehicle_fit_confirmed: vehicleFitConfirmed,
+        driver_fit_confirmed: driverFitConfirmed,
         signature_data_url: signature,
         reg_photo_data_url: regPhoto,
         pending_photos: defectPhotos.map((photo, i) => ({
@@ -616,11 +657,14 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
         {/* Timer Header */}
         <div className="bg-white border-b border-slate-200 p-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-500">10 minutes advised</span>
-            <div className="flex items-center gap-2 text-slate-700">
-              <Clock className="w-4 h-4" />
-              <span className="font-mono font-medium">{formatTime(elapsedSeconds)}</span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 text-slate-700">
+                <Clock className="w-4 h-4" />
+                <span className="font-mono font-medium">{formatTime(elapsedSeconds)}</span>
+              </div>
+              <span className="text-xs text-slate-400">10 mins advised</span>
             </div>
+            <span className="text-sm font-medium text-slate-500">{selectedVehicle?.registration}</span>
           </div>
         </div>
 
@@ -726,11 +770,14 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
         {/* Timer Header */}
         <div className="bg-slate-800 text-white px-4 py-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-300">10 minutes advised</span>
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              <span className="font-mono font-medium">{formatTime(elapsedSeconds)}</span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                <span className="font-mono font-medium">{formatTime(elapsedSeconds)}</span>
+              </div>
+              <span className="text-xs text-slate-400">10 mins advised</span>
             </div>
+            <span className="text-sm font-medium">{selectedVehicle?.registration}</span>
           </div>
         </div>
 
@@ -764,6 +811,7 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
                 item={item}
                 result={results.get(item.id)}
                 onResult={(status) => handleItemResult(item, status)}
+                onFuelLevelSelect={(level) => handleFuelLevelSelect(item, level)}
               />
             ))}
           </div>
@@ -809,6 +857,141 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
             fileInputRef={fileInputRef}
           />
         )}
+      </div>
+    );
+  }
+
+  // Notes Step (only shown if defects found)
+  if (step === 'notes') {
+    return (
+      <div className="min-h-screen bg-slate-100 flex flex-col">
+        <div className="bg-white border-b border-slate-200 p-4">
+          <h2 className="text-lg font-bold text-slate-900">Post-Check Notes</h2>
+          <p className="text-sm text-slate-500">{selectedVehicle?.registration}</p>
+        </div>
+
+        <div className="flex-1 overflow-auto p-4">
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
+                Defect Repair Notes
+              </label>
+              <p className="text-sm text-slate-400 mb-3">
+                Describe any repairs made before starting your journey
+              </p>
+              <textarea
+                value={defectRepairNotes}
+                onChange={(e) => setDefectRepairNotes(e.target.value)}
+                className="w-full p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                rows={4}
+                placeholder="E.g., Replaced blown indicator bulb..."
+              />
+            </div>
+
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
+                Further Notes for Head Office
+              </label>
+              <p className="text-sm text-slate-400 mb-3">
+                Issues needing attention on return to depot
+              </p>
+              <textarea
+                value={headOfficeNotes}
+                onChange={(e) => setHeadOfficeNotes(e.target.value)}
+                className="w-full p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                rows={4}
+                placeholder="E.g., Windscreen chip needs repair..."
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white border-t border-slate-200 p-4">
+          <button
+            onClick={() => setStep('confirmations')}
+            className="w-full py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors flex items-center justify-center gap-2"
+          >
+            Continue
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Confirmations Step
+  if (step === 'confirmations') {
+    return (
+      <div className="min-h-screen bg-slate-100 flex flex-col">
+        <div className="bg-white border-b border-slate-200 p-4">
+          <h2 className="text-lg font-bold text-slate-900">Confirmations</h2>
+          <p className="text-sm text-slate-500">{selectedVehicle?.registration}</p>
+        </div>
+
+        <div className="flex-1 overflow-auto p-4">
+          <div className="space-y-4">
+            <div
+              onClick={() => setVehicleFitConfirmed(!vehicleFitConfirmed)}
+              className={`bg-white rounded-lg p-4 shadow-sm border-2 cursor-pointer transition-colors ${
+                vehicleFitConfirmed
+                  ? 'border-green-500 bg-green-50'
+                  : 'border-transparent'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className={`w-6 h-6 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                  vehicleFitConfirmed
+                    ? 'bg-green-500 border-green-500'
+                    : 'border-slate-300'
+                }`}>
+                  {vehicleFitConfirmed && <Check className="w-4 h-4 text-white" />}
+                </div>
+                <div>
+                  <h3 className="text-slate-900 font-bold mb-1">Vehicle Fit Confirmation</h3>
+                  <p className="text-slate-500 text-sm">
+                    I confirm that the above checks have been carried out and I consider the vehicle fit for use
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div
+              onClick={() => setDriverFitConfirmed(!driverFitConfirmed)}
+              className={`bg-white rounded-lg p-4 shadow-sm border-2 cursor-pointer transition-colors ${
+                driverFitConfirmed
+                  ? 'border-green-500 bg-green-50'
+                  : 'border-transparent'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className={`w-6 h-6 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                  driverFitConfirmed
+                    ? 'bg-green-500 border-green-500'
+                    : 'border-slate-300'
+                }`}>
+                  {driverFitConfirmed && <Check className="w-4 h-4 text-white" />}
+                </div>
+                <div>
+                  <h3 className="text-slate-900 font-bold mb-1">Driver Fit Confirmation</h3>
+                  <p className="text-slate-500 text-sm">
+                    I confirm I am fit to drive, aware of company policies and LAW on Alcohol and Drugs, and fully aware of my driving hours/WTD/Tachograph rules
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white border-t border-slate-200 p-4">
+          <button
+            onClick={() => setStep('summary')}
+            disabled={!vehicleFitConfirmed || !driverFitConfirmed}
+            className="w-full py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+          >
+            Review Check
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
       </div>
     );
   }
@@ -1013,10 +1196,14 @@ interface CheckItemRowProps {
   item: CheckItem;
   result?: CheckItemResult;
   onResult: (status: CheckResult) => void;
+  onFuelLevelSelect: (level: FuelLevel) => void;
 }
 
-function CheckItemRow({ item, result, onResult }: CheckItemRowProps) {
+function CheckItemRow({ item, result, onResult, onFuelLevelSelect }: CheckItemRowProps) {
   const [showHelp, setShowHelp] = useState(false);
+
+  // Get input type with fallback for legacy templates
+  const inputType = item.input_type || 'pass_fail_na';
 
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
@@ -1027,6 +1214,9 @@ function CheckItemRow({ item, result, onResult }: CheckItemRowProps) {
               <span className="text-sm font-medium text-slate-900">
                 {item.label}
               </span>
+              {item.is_critical && (
+                <AlertCircle className="w-4 h-4 text-red-500" />
+              )}
               {item.photo_required && (
                 <Camera className="w-4 h-4 text-slate-400" />
               )}
@@ -1049,38 +1239,98 @@ function CheckItemRow({ item, result, onResult }: CheckItemRowProps) {
           </p>
         )}
 
-        <div className="flex gap-2">
-          <button
-            onClick={() => onResult('pass')}
-            className={`flex-1 py-3 rounded-lg font-bold transition-colors touch-target ${
-              result?.status === 'pass'
-                ? 'bg-green-500 text-white'
-                : 'bg-green-100 text-green-700 hover:bg-green-200'
-            }`}
-          >
-            <Check className="w-6 h-6 mx-auto" />
-          </button>
-          <button
-            onClick={() => onResult('fail')}
-            className={`flex-1 py-3 rounded-lg font-bold transition-colors touch-target ${
-              result?.status === 'fail'
-                ? 'bg-red-500 text-white'
-                : 'bg-red-100 text-red-700 hover:bg-red-200'
-            }`}
-          >
-            <X className="w-6 h-6 mx-auto" />
-          </button>
-          <button
-            onClick={() => onResult('na')}
-            className={`flex-1 py-3 rounded-lg font-bold transition-colors touch-target ${
-              result?.status === 'na'
-                ? 'bg-slate-500 text-white'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            <Minus className="w-6 h-6 mx-auto" />
-          </button>
-        </div>
+        {inputType === 'fuel_level' ? (
+          <div className="flex gap-2">
+            {FUEL_LEVELS.map((level) => (
+              <button
+                key={level.value}
+                onClick={() => onFuelLevelSelect(level.value)}
+                className={`flex-1 py-3 rounded-lg font-bold transition-colors flex flex-col items-center gap-1 ${
+                  result?.fuel_level === level.value
+                    ? 'bg-green-500 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <Fuel className={`w-5 h-5 ${
+                  result?.fuel_level === level.value ? 'text-white' :
+                  level.value === 'empty' ? 'text-red-500' :
+                  level.value === 'quarter' ? 'text-orange-500' :
+                  level.value === 'half' ? 'text-yellow-500' :
+                  level.value === 'three_quarter' ? 'text-green-400' :
+                  'text-green-500'
+                }`} />
+                <span className="text-xs">{level.label}</span>
+              </button>
+            ))}
+          </div>
+        ) : inputType === 'yes_no' ? (
+          <div className="flex gap-2">
+            <button
+              onClick={() => onResult('pass')}
+              className={`flex-1 py-3 rounded-lg font-bold transition-colors touch-target ${
+                result?.status === 'pass'
+                  ? 'bg-green-500 text-white'
+                  : 'bg-green-100 text-green-700 hover:bg-green-200'
+              }`}
+            >
+              Yes
+            </button>
+            <button
+              onClick={() => onResult('fail')}
+              className={`flex-1 py-3 rounded-lg font-bold transition-colors touch-target ${
+                result?.status === 'fail'
+                  ? 'bg-red-500 text-white'
+                  : 'bg-red-100 text-red-700 hover:bg-red-200'
+              }`}
+            >
+              No
+            </button>
+          </div>
+        ) : (
+          <div>
+            <div className={`flex gap-2 mb-1 text-xs font-medium text-slate-500`}>
+              <span className="flex-1 text-center">Yes</span>
+              <span className="flex-1 text-center">No</span>
+              {inputType === 'pass_fail_na' && (
+                <span className="flex-1 text-center">N/A</span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => onResult('pass')}
+                className={`flex-1 py-3 rounded-lg font-bold transition-colors touch-target ${
+                  result?.status === 'pass'
+                    ? 'bg-green-500 text-white'
+                    : 'bg-green-100 text-green-700 hover:bg-green-200'
+                }`}
+              >
+                <Check className="w-6 h-6 mx-auto" />
+              </button>
+              <button
+                onClick={() => onResult('fail')}
+                className={`flex-1 py-3 rounded-lg font-bold transition-colors touch-target ${
+                  result?.status === 'fail'
+                    ? 'bg-red-500 text-white'
+                    : 'bg-red-100 text-red-700 hover:bg-red-200'
+                }`}
+              >
+                <X className="w-6 h-6 mx-auto" />
+              </button>
+              {inputType === 'pass_fail_na' && (
+                <button
+                  onClick={() => onResult('na')}
+                  className={`flex-1 py-3 rounded-lg font-bold transition-colors touch-target ${
+                    result?.status === 'na'
+                      ? 'bg-slate-500 text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <Minus className="w-6 h-6 mx-auto" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
