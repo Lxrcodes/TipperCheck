@@ -15,6 +15,10 @@ export type VehicleType = 'tipper' | 'rigid_hgv' | 'artic' | 'trailer' | 'van' |
 
 export type CheckResult = 'pass' | 'fail' | 'na';
 
+export type FuelLevel = 'empty' | 'quarter' | 'half' | 'three_quarter' | 'full';
+
+export type CheckInputType = 'pass_fail' | 'pass_fail_na' | 'fuel_level' | 'yes_no';
+
 export type CheckStatus = 'pass' | 'defects' | 'do_not_drive';
 
 export type DefectSeverity = 'critical' | 'major' | 'minor';
@@ -129,6 +133,12 @@ export interface CheckRun {
   // Results
   results: CheckItemResult[];
   overall_status: CheckStatus;
+  // Notes
+  defect_repair_notes: string | null;
+  head_office_notes: string | null;
+  // Confirmations
+  vehicle_fit_confirmed: boolean;
+  driver_fit_confirmed: boolean;
   // Attachments
   signature_url: string | null;
   pdf_url: string | null;
@@ -218,14 +228,19 @@ export interface CheckCategory {
 export interface CheckItem {
   id: string;
   label: string;
-  severity: DefectSeverity;
+  description?: string;
+  input_type: CheckInputType;
+  is_critical: boolean;
   photo_required: boolean;
   help_text?: string;
+  // Legacy field for backwards compatibility
+  severity?: DefectSeverity;
 }
 
 export interface CheckItemResult {
   item_id: string;
   status: CheckResult;
+  fuel_level?: FuelLevel;
   note: string | null;
   photo_urls: string[];
 }
@@ -324,6 +339,10 @@ export interface PendingCheckRun {
   gps_end: GpsCoordinates | null;
   results: CheckItemResult[];
   overall_status: CheckStatus;
+  defect_repair_notes: string | null;
+  head_office_notes: string | null;
+  vehicle_fit_confirmed: boolean;
+  driver_fit_confirmed: boolean;
   signature_data_url: string;
   reg_photo_data_url: string | null;
   pending_photos: PendingPhoto[];
@@ -503,3 +522,97 @@ export const VEHICLE_STATUSES: { value: VehicleStatus; label: string }[] = [
   { value: 'vor', label: 'VOR (Off Road)' },
   { value: 'retired', label: 'Retired' },
 ];
+
+export const FUEL_LEVELS: { value: FuelLevel; label: string }[] = [
+  { value: 'empty', label: 'Empty' },
+  { value: 'quarter', label: '¼' },
+  { value: 'half', label: '½' },
+  { value: 'three_quarter', label: '¾' },
+  { value: 'full', label: 'Full' },
+];
+
+// ----------------------------------------------------------------------------
+// Default Check Template
+// ----------------------------------------------------------------------------
+
+export const DEFAULT_CHECK_TEMPLATE: Omit<CheckTemplate, 'id' | 'created_at'> = {
+  code: 'hgv_daily_v1',
+  name: 'HGV Daily Walk-Around Check',
+  version: 1,
+  vehicle_types: ['tipper', 'rigid_hgv', 'artic', 'grab_loader', 'van', 'other'],
+  is_active: true,
+  categories: [
+    {
+      name: 'Fluid Levels',
+      items: [
+        { id: 'fuel_level', label: 'Fuel Level', input_type: 'fuel_level', is_critical: false, photo_required: false },
+        { id: 'adblue_level', label: 'Ad-Blue Level', input_type: 'pass_fail_na', is_critical: false, photo_required: false },
+        { id: 'oil_coolant', label: 'Oil/Coolant Level', input_type: 'pass_fail', is_critical: false, photo_required: false },
+        { id: 'screenwash', label: 'Screenwash Level', input_type: 'pass_fail', is_critical: false, photo_required: false },
+      ],
+    },
+    {
+      name: 'Tachograph',
+      items: [
+        { id: 'tacho_time_calibration', label: 'Tachograph Time and Calibration', input_type: 'pass_fail_na', is_critical: false, photo_required: false },
+        { id: 'tacho_print_roll', label: 'Tachograph Spare Print Roll', input_type: 'pass_fail_na', is_critical: false, photo_required: false },
+        { id: 'tacho_plaque', label: 'Tachograph Plaque', input_type: 'pass_fail_na', is_critical: false, photo_required: false },
+        { id: 'driver_digi_card', label: 'Driver Digi Card', input_type: 'pass_fail_na', is_critical: false, photo_required: false },
+      ],
+    },
+    {
+      name: 'Cab & Controls',
+      items: [
+        { id: 'easysheet', label: 'Easysheet Operational', input_type: 'pass_fail', is_critical: false, photo_required: false },
+        { id: 'windscreen', label: 'Windscreen/Glazing', input_type: 'pass_fail', is_critical: true, photo_required: true },
+        { id: 'mirrors', label: 'Mirrors', input_type: 'pass_fail', is_critical: true, photo_required: true },
+        { id: 'mirrors_class_iv_v_vi', label: 'Class IV, V and VI Mirrors', input_type: 'pass_fail', is_critical: false, photo_required: false },
+        { id: 'cab_controls', label: 'Cab Controls (Inc. Height Indicator)', input_type: 'pass_fail', is_critical: false, photo_required: false },
+        { id: 'washers', label: 'Washers', input_type: 'pass_fail', is_critical: false, photo_required: false },
+        { id: 'wipers', label: 'Wipers', input_type: 'pass_fail', is_critical: false, photo_required: false },
+        { id: 'warning_signage', label: 'Prominent Warning Signage', input_type: 'yes_no', is_critical: false, photo_required: false },
+        { id: 'camera_monitor', label: 'Camera and Monitor System', input_type: 'pass_fail', is_critical: false, photo_required: false },
+        { id: 'no_smoking_sign', label: 'No Smoking Sign', input_type: 'pass_fail_na', is_critical: false, photo_required: false },
+        { id: 'seats_belts', label: 'Seats and Belts', input_type: 'pass_fail', is_critical: false, photo_required: false },
+        { id: 'horn', label: 'Horn', input_type: 'pass_fail', is_critical: false, photo_required: false },
+      ],
+    },
+    {
+      name: 'Lights & Signals',
+      items: [
+        { id: 'indicators', label: 'Indicators', input_type: 'pass_fail', is_critical: false, photo_required: false },
+        { id: 'lights', label: 'Lights', input_type: 'pass_fail', is_critical: true, photo_required: true },
+        { id: 'brake_lights', label: 'Brake Lights', input_type: 'pass_fail', is_critical: true, photo_required: true },
+        { id: 'reversing_alarm', label: 'Reversing Alarm', input_type: 'pass_fail', is_critical: false, photo_required: false },
+      ],
+    },
+    {
+      name: 'Mechanical',
+      items: [
+        { id: 'steering', label: 'Steering', input_type: 'pass_fail', is_critical: true, photo_required: true },
+        { id: 'engine_smoke', label: 'Engine Smoke Excessive', input_type: 'pass_fail', is_critical: false, photo_required: false },
+        { id: 'fuel_oil_leaks', label: 'Fuel/Oil Leaks', input_type: 'pass_fail', is_critical: true, photo_required: true },
+        { id: 'tyres_wheels', label: 'Tyres (Condition, Pressure, Wear, Age) and Wheel Fixing', input_type: 'pass_fail', is_critical: true, photo_required: true },
+        { id: 'brakes', label: 'Brakes and Brake Lights', input_type: 'pass_fail', is_critical: true, photo_required: true },
+        { id: 'battery_secure', label: 'Battery Secure', input_type: 'pass_fail', is_critical: false, photo_required: false },
+      ],
+    },
+    {
+      name: 'Exterior',
+      items: [
+        { id: 'mudwings_spray', label: 'Mudwings and Spray Suppressions', input_type: 'pass_fail', is_critical: false, photo_required: false },
+        { id: 'side_underrun', label: 'Side Under Run Protection', input_type: 'pass_fail', is_critical: false, photo_required: false },
+        { id: 'proximity_sensors', label: 'Close Proximity Sensors', input_type: 'pass_fail', is_critical: false, photo_required: false },
+        { id: 'clean_damage', label: 'Internal/External Clean and Damage Check', input_type: 'pass_fail', is_critical: false, photo_required: false },
+        { id: 'number_plates', label: 'Number Plates', input_type: 'pass_fail', is_critical: false, photo_required: false },
+      ],
+    },
+    {
+      name: 'Load Security',
+      items: [
+        { id: 'load_security', label: 'Load Security and Secure Load (Doors Locked and all security in place)', input_type: 'pass_fail_na', is_critical: false, photo_required: false },
+        { id: 'door_locks', label: 'Door Locks', input_type: 'pass_fail', is_critical: false, photo_required: false },
+      ],
+    },
+  ],
+};

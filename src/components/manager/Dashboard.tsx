@@ -280,7 +280,6 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
               <HistoryView
                 orgId={org.id}
                 vehicles={vehicles}
-                users={users}
               />
             )}
             {activeTab === 'vehicles' && (
@@ -950,10 +949,9 @@ function TeamView({ users, currentUserId, onAdd, onEdit }: TeamViewProps) {
 interface HistoryViewProps {
   orgId: string;
   vehicles: Vehicle[];
-  users: User[];
 }
 
-function HistoryView({ orgId, vehicles, users }: HistoryViewProps) {
+function HistoryView({ orgId, vehicles }: HistoryViewProps) {
   const [checks, setChecks] = useState<CheckRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
