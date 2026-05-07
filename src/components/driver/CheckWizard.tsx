@@ -37,7 +37,6 @@ import type {
   PendingCheck,
   GpsCoordinates,
   FuelLevel,
-  CheckInputType,
 } from '@/types';
 import { FUEL_LEVELS } from '@/types';
 
