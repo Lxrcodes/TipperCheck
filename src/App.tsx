@@ -124,7 +124,14 @@ function AppContent() {
       }
 
       // Check for canceled subscription - block all users
-      if (orgData.subscription_status === 'canceled') {
+      // Also check if subscription period has ended (fallback if webhook didn't fire)
+      const isSubscriptionExpired =
+        orgData.subscription_status === 'canceled' ||
+        (orgData.cancel_at_period_end &&
+         orgData.current_period_end &&
+         new Date(orgData.current_period_end) < new Date());
+
+      if (isSubscriptionExpired) {
         setOrg(orgData);
         setAuthUser({
           id: user.id,
