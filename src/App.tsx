@@ -11,9 +11,9 @@ import { CheckWizard } from '@/components/driver/CheckWizard';
 import { useOffline } from '@/hooks/useOffline';
 import { refreshTemplateCache, refreshVehicleCache } from '@/services/syncManager';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
-import type { AuthUser, Organisation, Vehicle, VehicleType } from '@/types';
+import type { AuthUser, Organisation, Vehicle, VehicleType, CheckStatus } from '@/types';
 import { isManager, isDriver, VEHICLE_TYPES } from '@/types';
-import { Loader2, AlertTriangle, Truck, CreditCard, RefreshCw, LogOut, XCircle, Plus, Trash2, Edit2, ChevronRight } from 'lucide-react';
+import { Loader2, AlertTriangle, Truck, CreditCard, RefreshCw, LogOut, XCircle, Plus, Trash2, ChevronRight } from 'lucide-react';
 import { createCheckoutSession } from '@/services/stripeClient';
 
 // ============================================================================
