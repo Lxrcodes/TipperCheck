@@ -344,7 +344,6 @@ function AppContent() {
     return (
       <SubscriptionExpired
         org={org}
-        isBillingAdmin={authUser.is_billing_admin}
         loading={paymentLoading}
         onResubscribe={async () => {
           setPaymentLoading(true);
@@ -555,7 +554,6 @@ function PaymentRequired({
 
 interface SubscriptionExpiredProps {
   org: Organisation;
-  isBillingAdmin: boolean;
   loading: boolean;
   onResubscribe: () => void;
   onLogout: () => void;
@@ -563,7 +561,6 @@ interface SubscriptionExpiredProps {
 
 function SubscriptionExpired({
   org,
-  isBillingAdmin,
   loading,
   onResubscribe,
   onLogout,
@@ -582,45 +579,37 @@ function SubscriptionExpired({
           Your subscription has ended and access to CheckaTruck has been suspended.
         </p>
 
-        {isBillingAdmin ? (
-          <div className="space-y-4">
-            {/* Pricing info */}
-            <div className="bg-slate-800 rounded-lg p-4 mb-4">
-              <p className="text-slate-300 text-sm mb-2">
-                Resubscribe to restore access for your entire team
-              </p>
-              <div className="text-white">
-                <span className="text-2xl font-bold">70p</span>
-                <span className="text-slate-400 text-sm"> per vehicle per week</span>
-              </div>
+        <div className="space-y-4">
+          {/* Pricing info */}
+          <div className="bg-slate-800 rounded-lg p-4 mb-4">
+            <p className="text-slate-300 text-sm mb-2">
+              Resubscribe to restore access for your entire team
+            </p>
+            <div className="text-white">
+              <span className="text-2xl font-bold">70p</span>
+              <span className="text-slate-400 text-sm"> per vehicle per week</span>
             </div>
-
-            <button
-              onClick={onResubscribe}
-              disabled={loading}
-              className="w-full py-4 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 text-lg"
-            >
-              {loading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <>
-                  <CreditCard className="w-5 h-5" />
-                  Resubscribe Now
-                </>
-              )}
-            </button>
-
-            <p className="text-slate-500 text-xs">
-              You'll be taken to our secure payment page
-            </p>
           </div>
-        ) : (
-          <div className="bg-slate-800 rounded-lg p-4">
-            <p className="text-slate-300 text-sm">
-              Please contact your billing administrator to restore access to CheckaTruck.
-            </p>
-          </div>
-        )}
+
+          <button
+            onClick={onResubscribe}
+            disabled={loading}
+            className="w-full py-4 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 text-lg"
+          >
+            {loading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <>
+                <CreditCard className="w-5 h-5" />
+                Resubscribe Now
+              </>
+            )}
+          </button>
+
+          <p className="text-slate-500 text-xs">
+            You'll be taken to our secure payment page
+          </p>
+        </div>
 
         <div className="mt-8">
           <button
