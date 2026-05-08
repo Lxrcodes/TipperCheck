@@ -574,7 +574,7 @@ function SubscriptionExpired({
         <div className="inline-flex items-center justify-center w-20 h-20 bg-red-500/10 rounded-full mb-6">
           <XCircle className="w-10 h-10 text-red-500" />
         </div>
-        <h1 className="text-2xl font-heading text-white mb-2">Subscription Expired</h1>
+        <h1 className="text-2xl font-heading text-white mb-2">Subscription Ended</h1>
         <p className="text-slate-400 mb-2">
           <span className="text-white font-medium">{org.name}</span>
         </p>
@@ -583,14 +583,22 @@ function SubscriptionExpired({
         </p>
 
         {isBillingAdmin ? (
-          <div className="space-y-3">
-            <p className="text-slate-400 text-sm mb-4">
-              Resubscribe now to restore access for your entire organisation.
-            </p>
+          <div className="space-y-4">
+            {/* Pricing info */}
+            <div className="bg-slate-800 rounded-lg p-4 mb-4">
+              <p className="text-slate-300 text-sm mb-2">
+                Resubscribe to restore access for your entire team
+              </p>
+              <div className="text-white">
+                <span className="text-2xl font-bold">70p</span>
+                <span className="text-slate-400 text-sm"> per vehicle per week</span>
+              </div>
+            </div>
+
             <button
               onClick={onResubscribe}
               disabled={loading}
-              className="w-full py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              className="w-full py-4 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 text-lg"
             >
               {loading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -601,6 +609,10 @@ function SubscriptionExpired({
                 </>
               )}
             </button>
+
+            <p className="text-slate-500 text-xs">
+              You'll be taken to our secure payment page
+            </p>
           </div>
         ) : (
           <div className="bg-slate-800 rounded-lg p-4">

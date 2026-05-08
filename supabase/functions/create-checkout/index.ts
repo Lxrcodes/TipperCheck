@@ -85,8 +85,8 @@ serve(async (req) => {
           quantity: billableVehicles || 1, // At least 1 for subscription
         },
       ],
-      success_url: `${Deno.env.get('APP_URL')}/settings?billing=success`,
-      cancel_url: `${Deno.env.get('APP_URL')}/settings?billing=cancelled`,
+      success_url: `${Deno.env.get('APP_URL')}/?subscription=active`,
+      cancel_url: `${Deno.env.get('APP_URL')}/?subscription=cancelled`,
       subscription_data: {
         metadata: { org_id: orgId },
       },

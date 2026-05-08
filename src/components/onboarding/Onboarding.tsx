@@ -13,9 +13,12 @@ import {
   LogOut,
   CreditCard,
   RefreshCw,
+  Plus,
+  CheckCircle2,
 } from 'lucide-react';
-import type { OnboardingType, VehicleType } from '@/types';
+import type { OnboardingType, VehicleType, CheckStatus } from '@/types';
 import { VEHICLE_TYPES } from '@/types';
+import { DemoCheckWizard } from '@/components/onboarding/DemoCheckWizard';
 
 interface OnboardingProps {
   email: string;
@@ -23,7 +26,14 @@ interface OnboardingProps {
   onBack: () => void;
 }
 
-type OnboardingStep = 'type' | 'org' | 'vehicle' | 'payment' | 'complete';
+type OnboardingStep = 'type' | 'org' | 'vehicle' | 'first_check' | 'add_vehicles' | 'payment' | 'complete';
+
+interface AdditionalVehicle {
+  registration: string;
+  vehicleType: VehicleType;
+  make: string;
+  model: string;
+}
 
 export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
   const [step, setStep] = useState<OnboardingStep>('type');
@@ -31,7 +41,10 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
-  const [pendingOrgId, setPendingOrgId] = useState<string | null>(null);
+
+  // Created IDs (after org/user/vehicle creation)
+  const [createdOrgId, setCreatedOrgId] = useState<string | null>(null);
+  const [createdUserId, setCreatedUserId] = useState<string | null>(null);
 
   // Form data
   const [orgName, setOrgName] = useState('');
@@ -43,6 +56,14 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
   const [vehicleType, setVehicleType] = useState<VehicleType>('tipper');
   const [vehicleMake, setVehicleMake] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
+
+  // Additional vehicles
+  const [additionalVehicles, setAdditionalVehicles] = useState<AdditionalVehicle[]>([]);
+  const [showAddVehicleForm, setShowAddVehicleForm] = useState(false);
+  const [newVehicleReg, setNewVehicleReg] = useState('');
+  const [newVehicleType, setNewVehicleType] = useState<VehicleType>('tipper');
+  const [newVehicleMake, setNewVehicleMake] = useState('');
+  const [newVehicleModel, setNewVehicleModel] = useState('');
 
   // Handle return from Stripe checkout
   useEffect(() => {
@@ -63,7 +84,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
       // Try to get org ID from localStorage
       const storedOrgId = localStorage.getItem('pending_org_id');
       if (storedOrgId) {
-        setPendingOrgId(storedOrgId);
+        setCreatedOrgId(storedOrgId);
       }
     }
   }, []);
@@ -107,11 +128,11 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
 
       // If we get here, webhook hasn't processed yet
       setError('Payment is being processed. Please wait a moment and try again.');
-      setPendingOrgId(orgId);
+      setCreatedOrgId(orgId);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to verify payment';
       setError(message);
-      setPendingOrgId(orgId);
+      setCreatedOrgId(orgId);
     } finally {
       setVerifyingPayment(false);
     }
@@ -119,13 +140,13 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
 
   // Retry checkout for pending payment
   const retryCheckout = async () => {
-    if (!pendingOrgId) return;
+    if (!createdOrgId) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const checkoutUrl = await createCheckoutSession(pendingOrgId);
+      const checkoutUrl = await createCheckoutSession(createdOrgId);
 
       if (checkoutUrl) {
         window.location.href = checkoutUrl;
@@ -150,7 +171,8 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
     setStep('vehicle');
   };
 
-  const handleComplete = async () => {
+  // Create org, user, and first vehicle - then proceed to first check
+  const handleVehicleSubmit = async () => {
     if (!type || !orgName.trim() || !userName.trim() || !vehicleReg.trim()) return;
 
     setLoading(true);
@@ -161,15 +183,15 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) throw new Error('Not authenticated');
 
-      // Generate IDs client-side to avoid needing SELECT after INSERT
+      // Generate IDs client-side
       const orgId = crypto.randomUUID();
       const userId = crypto.randomUUID();
+      const vehicleId = crypto.randomUUID();
 
       // Both owner-operators and fleet managers get both roles
-      // This allows the first user to perform checks themselves if needed
       const roles = ['manager', 'driver'];
 
-      // Create organisation (no .select() needed - we have the ID)
+      // Create organisation
       const { error: orgError } = await supabase
         .from('organisations')
         .insert({
@@ -182,7 +204,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
 
       if (orgError) throw orgError;
 
-      // Create user record (no .select() needed - we have the ID)
+      // Create user record
       const { error: userError } = await supabase
         .from('users')
         .insert({
@@ -199,10 +221,11 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
 
       if (userError) throw userError;
 
-      // Create first vehicle (required)
+      // Create first vehicle
       const { error: vehicleError } = await supabase
         .from('vehicles')
         .insert({
+          id: vehicleId,
           org_id: orgId,
           registration: vehicleReg.trim().toUpperCase(),
           vehicle_type: vehicleType,
@@ -214,19 +237,15 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
 
       if (vehicleError) throw vehicleError;
 
-      // Store org ID for recovery if user closes browser during checkout
+      // Store created IDs
+      setCreatedOrgId(orgId);
+      setCreatedUserId(userId);
+
+      // Store org ID for recovery
       localStorage.setItem('pending_org_id', orgId);
-      setPendingOrgId(orgId);
 
-      // Redirect to Stripe checkout
-      const checkoutUrl = await createCheckoutSession(orgId);
-
-      if (checkoutUrl) {
-        window.location.href = checkoutUrl;
-      } else {
-        setError('Failed to create checkout session. Please try again.');
-        setStep('payment');
-      }
+      // Proceed to first check
+      setStep('first_check');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to create account';
       setError(message);
@@ -235,6 +254,92 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
       setLoading(false);
     }
   };
+
+  // Handle first check completion
+  const handleFirstCheckComplete = (status: CheckStatus) => {
+    console.log('First check completed with status:', status);
+    setStep('add_vehicles');
+  };
+
+  // Add additional vehicle
+  const handleAddVehicle = async () => {
+    if (!newVehicleReg.trim() || !createdOrgId || !createdUserId) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const vehicleId = crypto.randomUUID();
+
+      const { error: vehicleError } = await supabase
+        .from('vehicles')
+        .insert({
+          id: vehicleId,
+          org_id: createdOrgId,
+          registration: newVehicleReg.trim().toUpperCase(),
+          vehicle_type: newVehicleType,
+          make: newVehicleMake.trim() || null,
+          model: newVehicleModel.trim() || null,
+          status: 'active',
+          created_by: createdUserId,
+        });
+
+      if (vehicleError) throw vehicleError;
+
+      // Add to local list
+      setAdditionalVehicles([
+        ...additionalVehicles,
+        {
+          registration: newVehicleReg.trim().toUpperCase(),
+          vehicleType: newVehicleType,
+          make: newVehicleMake.trim(),
+          model: newVehicleModel.trim(),
+        },
+      ]);
+
+      // Reset form
+      setNewVehicleReg('');
+      setNewVehicleType('tipper');
+      setNewVehicleMake('');
+      setNewVehicleModel('');
+      setShowAddVehicleForm(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to add vehicle';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Proceed to payment
+  const handleProceedToPayment = async () => {
+    if (!createdOrgId) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const checkoutUrl = await createCheckoutSession(createdOrgId);
+
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl;
+      } else {
+        setError('Failed to create checkout session. Please try again.');
+        setStep('payment');
+      }
+    } catch (err) {
+      setError('Failed to start payment. Please try again.');
+      setStep('payment');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Calculate total vehicles and pricing with VAT
+  const totalVehicles = 1 + additionalVehicles.length;
+  const weeklySubtotal = totalVehicles * 0.70;
+  const weeklyVat = weeklySubtotal * 0.20;
+  const weeklyTotal = (weeklySubtotal + weeklyVat).toFixed(2);
 
   // ============================================================================
   // Step: Type Selection
@@ -417,7 +522,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
             <div>
               <h1 className="text-xl font-heading text-white">Add Your First Vehicle</h1>
               <p className="text-sm text-slate-400">
-                Add a vehicle to get started with CheckaTruck
+                You'll do a free trial check on this vehicle
               </p>
             </div>
           </div>
@@ -425,7 +530,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              handleComplete();
+              handleVehicleSubmit();
             }}
             className="space-y-4"
           >
@@ -502,17 +607,192 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
                   <>
-                    <CreditCard className="w-5 h-5" />
-                    Continue to Payment
+                    <Check className="w-5 h-5" />
+                    Start Your First Check
                   </>
                 )}
               </button>
 
               <p className="text-center text-slate-500 text-xs">
-                You'll be redirected to our secure payment page
+                Try out the check process before you pay
               </p>
             </div>
           </form>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // Step: First Vehicle Check (Demo - no database)
+  // ============================================================================
+  if (step === 'first_check') {
+    return (
+      <DemoCheckWizard
+        vehicleReg={vehicleReg}
+        vehicleType={vehicleType}
+        driverName={userName}
+        onComplete={handleFirstCheckComplete}
+      />
+    );
+  }
+
+  // ============================================================================
+  // Step: Add More Vehicles
+  // ============================================================================
+  if (step === 'add_vehicles') {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-500 rounded-full mb-4">
+              <CheckCircle2 className="w-10 h-10 text-white" />
+            </div>
+            <h1 className="text-2xl font-heading text-white mb-2">Check Complete!</h1>
+            <p className="text-slate-400">
+              That's how easy it is. Now let's set up your subscription.
+            </p>
+          </div>
+
+          {/* Current vehicles */}
+          <div className="bg-slate-800 rounded-lg p-4 mb-4">
+            <h3 className="text-xs font-bold text-slate-400 uppercase mb-3">Your Vehicles</h3>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between py-2 border-b border-slate-700">
+                <div className="flex items-center gap-3">
+                  <Truck className="w-5 h-5 text-orange-500" />
+                  <span className="font-mono font-bold text-white">{vehicleReg.toUpperCase()}</span>
+                </div>
+                <span className="text-slate-400 text-sm">First vehicle</span>
+              </div>
+              {additionalVehicles.map((v, i) => (
+                <div key={i} className="flex items-center justify-between py-2 border-b border-slate-700">
+                  <div className="flex items-center gap-3">
+                    <Truck className="w-5 h-5 text-blue-500" />
+                    <span className="font-mono font-bold text-white">{v.registration}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Add vehicle form */}
+          {showAddVehicleForm ? (
+            <div className="bg-slate-800 rounded-lg p-4 mb-4">
+              <h3 className="text-sm font-bold text-white mb-3">Add Another Vehicle</h3>
+              {error && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg mb-3">
+                  <p className="text-sm text-red-400">{error}</p>
+                </div>
+              )}
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  value={newVehicleReg}
+                  onChange={(e) => setNewVehicleReg(e.target.value.toUpperCase())}
+                  className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none uppercase font-mono"
+                  placeholder="Registration"
+                />
+                <select
+                  value={newVehicleType}
+                  onChange={(e) => setNewVehicleType(e.target.value as VehicleType)}
+                  className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                >
+                  {VEHICLE_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={newVehicleMake}
+                    onChange={(e) => setNewVehicleMake(e.target.value)}
+                    className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                    placeholder="Make (optional)"
+                  />
+                  <input
+                    type="text"
+                    value={newVehicleModel}
+                    onChange={(e) => setNewVehicleModel(e.target.value)}
+                    className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                    placeholder="Model (optional)"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowAddVehicleForm(false)}
+                    className="flex-1 py-2 bg-slate-600 text-white font-medium rounded-lg hover:bg-slate-500 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAddVehicle}
+                    disabled={loading || !newVehicleReg.trim()}
+                    className="flex-1 py-2 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAddVehicleForm(true)}
+              className="w-full py-3 mb-4 bg-slate-800 text-slate-300 font-medium rounded-lg hover:bg-slate-700 transition-colors flex items-center justify-center gap-2"
+            >
+              <Plus className="w-5 h-5" />
+              Add Another Vehicle
+            </button>
+          )}
+
+          {/* Pricing summary */}
+          <div className="bg-slate-800 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-slate-400">Vehicles</span>
+              <span className="text-white font-bold">{totalVehicles}</span>
+            </div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-slate-400">Price per vehicle</span>
+              <span className="text-white">70p/week</span>
+            </div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-slate-400">Subtotal</span>
+              <span className="text-white">£{weeklySubtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-slate-400">VAT (20%)</span>
+              <span className="text-white">£{weeklyVat.toFixed(2)}</span>
+            </div>
+            <div className="border-t border-slate-700 pt-2 mt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-white font-bold">Weekly total</span>
+                <span className="text-orange-500 font-bold text-lg">£{weeklyTotal}</span>
+              </div>
+              <p className="text-slate-500 text-xs mt-1">Inc. VAT</p>
+            </div>
+          </div>
+
+          {/* Continue to payment */}
+          <button
+            onClick={handleProceedToPayment}
+            disabled={loading}
+            className="w-full py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <>
+                <CreditCard className="w-5 h-5" />
+                Continue to Payment
+              </>
+            )}
+          </button>
+
+          <p className="text-center text-slate-500 text-xs mt-3">
+            You can add more vehicles anytime from the dashboard
+          </p>
         </div>
       </div>
     );
@@ -553,7 +833,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
 
               <button
                 onClick={retryCheckout}
-                disabled={loading || !pendingOrgId}
+                disabled={loading || !createdOrgId}
                 className="w-full py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
               >
                 {loading ? (
