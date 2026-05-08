@@ -11,9 +11,9 @@ import { CheckWizard } from '@/components/driver/CheckWizard';
 import { useOffline } from '@/hooks/useOffline';
 import { refreshTemplateCache, refreshVehicleCache } from '@/services/syncManager';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
-import type { AuthUser, Organisation, CheckStatus } from '@/types';
-import { isManager, isDriver } from '@/types';
-import { Loader2, AlertTriangle, Truck, CreditCard, RefreshCw, LogOut, XCircle } from 'lucide-react';
+import type { AuthUser, Organisation, Vehicle, VehicleType } from '@/types';
+import { isManager, isDriver, VEHICLE_TYPES } from '@/types';
+import { Loader2, AlertTriangle, Truck, CreditCard, RefreshCw, LogOut, XCircle, Plus, Trash2, Edit2, ChevronRight } from 'lucide-react';
 import { createCheckoutSession } from '@/services/stripeClient';
 
 // ============================================================================
@@ -565,35 +565,254 @@ function SubscriptionExpired({
   onResubscribe,
   onLogout,
 }: SubscriptionExpiredProps) {
-  return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md text-center">
-        <div className="inline-flex items-center justify-center w-20 h-20 bg-red-500/10 rounded-full mb-6">
-          <XCircle className="w-10 h-10 text-red-500" />
-        </div>
-        <h1 className="text-2xl font-heading text-white mb-2">Subscription Ended</h1>
-        <p className="text-slate-400 mb-2">
-          <span className="text-white font-medium">{org.name}</span>
-        </p>
-        <p className="text-slate-400 mb-6">
-          Your subscription has ended and access to CheckaTruck has been suspended.
-        </p>
+  const [step, setStep] = useState<'intro' | 'fleet'>('intro');
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehiclesLoading, setVehiclesLoading] = useState(true);
+  const [showAddVehicle, setShowAddVehicle] = useState(false);
+  const [newRegistration, setNewRegistration] = useState('');
+  const [newVehicleType, setNewVehicleType] = useState<VehicleType>('tipper');
+  const [addingVehicle, setAddingVehicle] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-        <div className="space-y-4">
-          {/* Pricing info */}
-          <div className="bg-slate-800 rounded-lg p-4 mb-4">
-            <p className="text-slate-300 text-sm mb-2">
-              Resubscribe to restore access for your entire team
-            </p>
-            <div className="text-white">
-              <span className="text-2xl font-bold">70p</span>
-              <span className="text-slate-400 text-sm"> per vehicle per week</span>
+  // Fetch vehicles on mount
+  useEffect(() => {
+    const loadVehicles = async () => {
+      const { data } = await supabase
+        .from('vehicles')
+        .select('*')
+        .eq('org_id', org.id)
+        .order('registration');
+      setVehicles(data || []);
+      setVehiclesLoading(false);
+    };
+    loadVehicles();
+  }, [org.id]);
+
+  const activeVehicles = vehicles.filter((v) => v.status === 'active');
+  const weeklyPrice = (activeVehicles.length * 0.7).toFixed(2);
+  const monthlyPrice = (activeVehicles.length * 0.7 * 4.33).toFixed(2);
+
+  const handleAddVehicle = async () => {
+    if (!newRegistration.trim()) return;
+    setAddingVehicle(true);
+    try {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .insert({
+          org_id: org.id,
+          registration: newRegistration.trim().toUpperCase(),
+          vehicle_type: newVehicleType,
+          status: 'active',
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      setVehicles([...vehicles, data]);
+      setNewRegistration('');
+      setShowAddVehicle(false);
+    } catch (err) {
+      console.error('Failed to add vehicle:', err);
+    } finally {
+      setAddingVehicle(false);
+    }
+  };
+
+  const handleDeleteVehicle = async (vehicleId: string) => {
+    setDeletingId(vehicleId);
+    try {
+      await supabase.from('vehicles').delete().eq('id', vehicleId);
+      setVehicles(vehicles.filter((v) => v.id !== vehicleId));
+    } catch (err) {
+      console.error('Failed to delete vehicle:', err);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // Intro step
+  if (step === 'intro') {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md text-center">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-red-500/10 rounded-full mb-6">
+            <XCircle className="w-10 h-10 text-red-500" />
+          </div>
+          <h1 className="text-2xl font-heading text-white mb-2">Subscription Ended</h1>
+          <p className="text-slate-400 mb-2">
+            <span className="text-white font-medium">{org.name}</span>
+          </p>
+          <p className="text-slate-400 mb-6">
+            Your subscription has ended and access to CheckaTruck has been suspended.
+          </p>
+
+          <div className="space-y-4">
+            <div className="bg-slate-800 rounded-lg p-4">
+              <p className="text-slate-300 text-sm mb-2">
+                Resubscribe to restore access for your entire team
+              </p>
+              <div className="text-white">
+                <span className="text-2xl font-bold">70p</span>
+                <span className="text-slate-400 text-sm"> per vehicle per week</span>
+              </div>
             </div>
+
+            <button
+              onClick={() => setStep('fleet')}
+              className="w-full py-4 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors flex items-center justify-center gap-2 text-lg"
+            >
+              <Truck className="w-5 h-5" />
+              Review Fleet & Resubscribe
+              <ChevronRight className="w-5 h-5" />
+            </button>
           </div>
 
+          <div className="mt-8">
+            <button
+              onClick={onLogout}
+              className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sign out</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Fleet management step
+  return (
+    <div className="min-h-screen bg-slate-900 flex flex-col p-4">
+      <div className="w-full max-w-lg mx-auto">
+        {/* Header */}
+        <div className="text-center mb-6">
+          <h1 className="text-2xl font-heading text-white mb-2">Your Fleet</h1>
+          <p className="text-slate-400">
+            Review your vehicles before resubscribing
+          </p>
+        </div>
+
+        {/* Vehicle List */}
+        <div className="bg-slate-800 rounded-lg overflow-hidden mb-4">
+          {vehiclesLoading ? (
+            <div className="p-8 text-center">
+              <Loader2 className="w-6 h-6 animate-spin text-orange-500 mx-auto" />
+            </div>
+          ) : vehicles.length === 0 ? (
+            <div className="p-8 text-center">
+              <Truck className="w-10 h-10 text-slate-600 mx-auto mb-2" />
+              <p className="text-slate-400">No vehicles yet</p>
+              <p className="text-slate-500 text-sm">Add at least one vehicle to continue</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-700">
+              {vehicles.map((vehicle) => (
+                <div
+                  key={vehicle.id}
+                  className={`flex items-center justify-between p-4 ${
+                    vehicle.status !== 'active' ? 'opacity-50' : ''
+                  }`}
+                >
+                  <div>
+                    <div className="font-mono font-bold text-white">
+                      {vehicle.registration}
+                    </div>
+                    <div className="text-sm text-slate-400">
+                      {VEHICLE_TYPES.find((t) => t.value === vehicle.vehicle_type)?.label}
+                      {vehicle.status !== 'active' && (
+                        <span className="ml-2 text-amber-500">({vehicle.status.toUpperCase()})</span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteVehicle(vehicle.id)}
+                    disabled={deletingId === vehicle.id}
+                    className="p-2 text-slate-400 hover:text-red-500 disabled:opacity-50"
+                  >
+                    {deletingId === vehicle.id ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add Vehicle Form */}
+          {showAddVehicle ? (
+            <div className="p-4 border-t border-slate-700 bg-slate-700/50">
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  value={newRegistration}
+                  onChange={(e) => setNewRegistration(e.target.value.toUpperCase())}
+                  placeholder="Registration (e.g. AB12 CDE)"
+                  className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white font-mono placeholder-slate-500 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                />
+                <select
+                  value={newVehicleType}
+                  onChange={(e) => setNewVehicleType(e.target.value as VehicleType)}
+                  className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                >
+                  {VEHICLE_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowAddVehicle(false)}
+                    className="flex-1 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAddVehicle}
+                    disabled={!newRegistration.trim() || addingVehicle}
+                    className="flex-1 py-2 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {addingVehicle && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAddVehicle(true)}
+              className="w-full p-4 border-t border-slate-700 text-orange-500 hover:bg-slate-700/50 flex items-center justify-center gap-2 font-medium"
+            >
+              <Plus className="w-5 h-5" />
+              Add Vehicle
+            </button>
+          )}
+        </div>
+
+        {/* Pricing Summary */}
+        <div className="bg-slate-800 rounded-lg p-4 mb-6">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-slate-400">Active Vehicles</span>
+            <span className="text-white font-bold">{activeVehicles.length}</span>
+          </div>
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-slate-400">Weekly Cost</span>
+            <span className="text-white font-bold">£{weeklyPrice}</span>
+          </div>
+          <div className="flex justify-between items-center pt-2 border-t border-slate-700">
+            <span className="text-slate-400">Estimated Monthly</span>
+            <span className="text-orange-500 font-bold text-lg">£{monthlyPrice}</span>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="space-y-3">
           <button
             onClick={onResubscribe}
-            disabled={loading}
+            disabled={loading || activeVehicles.length === 0}
             className="w-full py-4 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 text-lg"
           >
             {loading ? (
@@ -601,20 +820,29 @@ function SubscriptionExpired({
             ) : (
               <>
                 <CreditCard className="w-5 h-5" />
-                Resubscribe Now
+                Continue to Payment
               </>
             )}
           </button>
 
-          <p className="text-slate-500 text-xs">
-            You'll be taken to our secure payment page
-          </p>
+          {activeVehicles.length === 0 && (
+            <p className="text-amber-500 text-sm text-center">
+              Add at least one active vehicle to continue
+            </p>
+          )}
+
+          <button
+            onClick={() => setStep('intro')}
+            className="w-full py-3 text-slate-400 hover:text-white transition-colors"
+          >
+            Back
+          </button>
         </div>
 
-        <div className="mt-8">
+        <div className="mt-6 text-center">
           <button
             onClick={onLogout}
-            className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+            className="inline-flex items-center gap-2 text-slate-500 hover:text-white transition-colors text-sm"
           >
             <LogOut className="w-4 h-4" />
             <span>Sign out</span>
