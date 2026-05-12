@@ -61,7 +61,6 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
   const [vehicleModel, setVehicleModel] = useState('');
   const [vehicleMotDue, setVehicleMotDue] = useState('');
   const [vehicleNextPmi, setVehicleNextPmi] = useState('');
-  const [vehiclePmiInterval, setVehiclePmiInterval] = useState(6);
 
   // Additional vehicles
   const [additionalVehicles, setAdditionalVehicles] = useState<AdditionalVehicle[]>([]);
@@ -242,7 +241,6 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
           model: vehicleModel.trim() || null,
           mot_due_date: vehicleMotDue || null,
           next_pmi_due_date: vehicleNextPmi || null,
-          pmi_interval_weeks: vehiclePmiInterval,
           status: 'active',
           created_by: userId,
         });
@@ -294,7 +292,6 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
           model: newVehicleModel.trim() || null,
           mot_due_date: newVehicleMotDue || null,
           next_pmi_due_date: newVehicleNextPmi || null,
-          pmi_interval_weeks: newVehiclePmiInterval,
           status: 'active',
           created_by: createdUserId,
         });
@@ -642,18 +639,6 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
                     className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                   />
                 </div>
-                <div className="col-span-2 space-y-1">
-                  <label className="text-xs font-bold text-slate-400 uppercase">PMI Interval (weeks)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={52}
-                    value={vehiclePmiInterval}
-                    onChange={(e) => setVehiclePmiInterval(Math.max(1, parseInt(e.target.value) || 6))}
-                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
-                  />
-                  <p className="text-xs text-slate-500">Default is 6 weeks — adjust for your vehicle type and usage</p>
-                </div>
               </div>
             </div>
 
@@ -793,18 +778,6 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
                     className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                     title="Next PMI Due (optional)"
                   />
-                  <div className="col-span-2 flex items-center gap-2">
-                    <span className="text-xs text-slate-400 whitespace-nowrap">PMI every</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={52}
-                      value={newVehiclePmiInterval}
-                      onChange={(e) => setNewVehiclePmiInterval(Math.max(1, parseInt(e.target.value) || 6))}
-                      className="w-16 px-2 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-center focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
-                    />
-                    <span className="text-xs text-slate-400">weeks</span>
-                  </div>
                 </div>
                 <div className="flex gap-2">
                   <button
