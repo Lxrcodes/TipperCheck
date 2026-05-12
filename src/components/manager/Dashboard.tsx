@@ -27,6 +27,9 @@ import {
   History,
   Calendar,
   FileText,
+  ClipboardCheck,
+  Wrench,
+  ArrowUpDown,
 } from 'lucide-react';
 import type {
   AuthUser,
@@ -47,6 +50,8 @@ import {
 } from '@/types';
 import { VehicleModal } from './VehicleModal';
 import { UserModal } from './UserModal';
+import { MotRecordModal } from './MotRecordModal';
+import { PmiRecordModal } from './PmiRecordModal';
 
 type DashboardTab = 'today' | 'history' | 'vehicles' | 'team' | 'defects' | 'settings';
 
@@ -74,6 +79,10 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [showMotModal, setShowMotModal] = useState(false);
+  const [motVehicle, setMotVehicle] = useState<Vehicle | null>(null);
+  const [showPmiModal, setShowPmiModal] = useState(false);
+  const [pmiVehicle, setPmiVehicle] = useState<Vehicle | null>(null);
 
   // Load data
   useEffect(() => {
@@ -123,6 +132,28 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
     setShowUserModal(false);
     setEditingUser(null);
     loadData();
+  };
+
+  const handleMotSaved = () => {
+    setShowMotModal(false);
+    setMotVehicle(null);
+    loadData();
+  };
+
+  const openMotModal = (vehicle: Vehicle) => {
+    setMotVehicle(vehicle);
+    setShowMotModal(true);
+  };
+
+  const handlePmiSaved = () => {
+    setShowPmiModal(false);
+    setPmiVehicle(null);
+    loadData();
+  };
+
+  const openPmiModal = (vehicle: Vehicle) => {
+    setPmiVehicle(vehicle);
+    setShowPmiModal(true);
   };
 
   // Stats
@@ -274,6 +305,8 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
                 vehicles={vehicles}
                 checks={todayChecks}
                 defects={openDefects}
+                onRecordMot={openMotModal}
+                onRecordPmi={openPmiModal}
               />
             )}
             {activeTab === 'history' && (
@@ -293,6 +326,8 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
                   setEditingVehicle(v);
                   setShowVehicleModal(true);
                 }}
+                onRecordMot={openMotModal}
+                onRecordPmi={openPmiModal}
               />
             )}
             {activeTab === 'team' && (
@@ -341,6 +376,34 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
             setEditingUser(null);
           }}
           onSaved={handleUserSaved}
+        />
+      )}
+
+      {showMotModal && motVehicle && (
+        <MotRecordModal
+          vehicle={motVehicle}
+          orgId={org.id}
+          userId={user.id}
+          userName={user.name}
+          onClose={() => {
+            setShowMotModal(false);
+            setMotVehicle(null);
+          }}
+          onSaved={handleMotSaved}
+        />
+      )}
+
+      {showPmiModal && pmiVehicle && (
+        <PmiRecordModal
+          vehicle={pmiVehicle}
+          orgId={org.id}
+          userId={user.id}
+          userName={user.name}
+          onClose={() => {
+            setShowPmiModal(false);
+            setPmiVehicle(null);
+          }}
+          onSaved={handlePmiSaved}
         />
       )}
     </div>
@@ -399,15 +462,93 @@ interface TodayViewProps {
   vehicles: Vehicle[];
   checks: CheckRun[];
   defects: Defect[];
+  onRecordMot: (vehicle: Vehicle) => void;
+  onRecordPmi: (vehicle: Vehicle) => void;
 }
 
-function TodayView({ vehicles, checks, defects }: TodayViewProps) {
+function getMotDaysUntil(motDueDate: string): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(motDueDate);
+  due.setHours(0, 0, 0, 0);
+  return Math.floor((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+type MotAlertLevel = 'overdue' | 'critical' | 'urgent' | 'warning' | 'notice';
+
+function getMotAlertLevel(daysUntil: number): MotAlertLevel {
+  if (daysUntil < 0) return 'overdue';
+  if (daysUntil <= 10) return 'critical';
+  if (daysUntil <= 14) return 'urgent';
+  if (daysUntil <= 21) return 'warning';
+  return 'notice';
+}
+
+function getMotAlertLabel(daysUntil: number): string {
+  if (daysUntil < 0) return `MOT overdue by ${Math.abs(daysUntil)} day${Math.abs(daysUntil) !== 1 ? 's' : ''}`;
+  if (daysUntil === 0) return 'MOT due today';
+  if (daysUntil === 1) return 'MOT due tomorrow';
+  if (daysUntil <= 10) return `MOT due in ${daysUntil} days`;
+  if (daysUntil <= 14) return 'MOT due in 2 weeks';
+  if (daysUntil <= 21) return 'MOT due in 3 weeks';
+  return 'MOT due in ~1 month';
+}
+
+const MOT_ALERT_STYLES: Record<MotAlertLevel, { border: string; bg: string; text: string; badge: string }> = {
+  overdue: { border: 'border-red-500', bg: 'bg-red-50', text: 'text-red-700', badge: 'bg-red-500 text-white' },
+  critical: { border: 'border-red-400', bg: 'bg-red-50', text: 'text-red-700', badge: 'bg-red-500 text-white' },
+  urgent: { border: 'border-amber-500', bg: 'bg-amber-50', text: 'text-amber-700', badge: 'bg-amber-500 text-white' },
+  warning: { border: 'border-amber-400', bg: 'bg-amber-50', text: 'text-amber-700', badge: 'bg-amber-500 text-white' },
+  notice: { border: 'border-yellow-400', bg: 'bg-yellow-50', text: 'text-yellow-700', badge: 'bg-yellow-500 text-white' },
+};
+
+// PMI alerts: threshold is 7 days (1 week), levels at 1, 3, 5, 7 days
+type PmiAlertLevel = 'overdue' | 'critical' | 'urgent' | 'warning' | 'notice';
+
+function getPmiAlertLevel(daysUntil: number): PmiAlertLevel {
+  if (daysUntil < 0) return 'overdue';
+  if (daysUntil <= 1) return 'critical';
+  if (daysUntil <= 3) return 'urgent';
+  if (daysUntil <= 5) return 'warning';
+  return 'notice';
+}
+
+function getPmiAlertLabel(daysUntil: number): string {
+  if (daysUntil < 0) return `PMI overdue by ${Math.abs(daysUntil)} day${Math.abs(daysUntil) !== 1 ? 's' : ''}`;
+  if (daysUntil === 0) return 'PMI due today';
+  if (daysUntil === 1) return 'PMI due tomorrow';
+  return `PMI due in ${daysUntil} days`;
+}
+
+const PMI_ALERT_STYLES: Record<PmiAlertLevel, { border: string; bg: string; text: string; badge: string }> = {
+  overdue: { border: 'border-red-500', bg: 'bg-red-50', text: 'text-red-700', badge: 'bg-red-500 text-white' },
+  critical: { border: 'border-red-400', bg: 'bg-red-50', text: 'text-red-700', badge: 'bg-red-500 text-white' },
+  urgent: { border: 'border-amber-500', bg: 'bg-amber-50', text: 'text-amber-700', badge: 'bg-amber-500 text-white' },
+  warning: { border: 'border-amber-400', bg: 'bg-amber-50', text: 'text-amber-700', badge: 'bg-amber-500 text-white' },
+  notice: { border: 'border-yellow-400', bg: 'bg-yellow-50', text: 'text-yellow-700', badge: 'bg-yellow-500 text-white' },
+};
+
+function TodayView({ vehicles, checks, defects, onRecordMot, onRecordPmi }: TodayViewProps) {
   const activeVehicles = vehicles.filter((v) => v.status === 'active');
   const checkedVehicleIds = new Set(checks.map((c) => c.vehicle_id));
 
   const getVehicleCheck = (vehicleId: string) => {
     return checks.find((c) => c.vehicle_id === vehicleId);
   };
+
+  // Compute MOT alerts: show for any vehicle (active or not) within 30 days or overdue
+  const motAlerts = vehicles
+    .filter((v) => v.mot_due_date && v.status !== 'retired')
+    .map((v) => ({ vehicle: v, daysUntil: getMotDaysUntil(v.mot_due_date!) }))
+    .filter(({ daysUntil }) => daysUntil <= 30)
+    .sort((a, b) => a.daysUntil - b.daysUntil);
+
+  // Compute PMI alerts: show within 7 days or overdue
+  const pmiAlerts = vehicles
+    .filter((v) => v.next_pmi_due_date && v.status !== 'retired')
+    .map((v) => ({ vehicle: v, daysUntil: getMotDaysUntil(v.next_pmi_due_date!) }))
+    .filter(({ daysUntil }) => daysUntil <= 7)
+    .sort((a, b) => a.daysUntil - b.daysUntil);
 
   return (
     <div className="p-6">
@@ -434,6 +575,78 @@ function TodayView({ vehicles, checks, defects }: TodayViewProps) {
           color={defects.some((d) => d.severity === 'critical') ? 'red' : 'slate'}
         />
       </div>
+
+      {/* MOT Alerts */}
+      {motAlerts.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
+            <ClipboardCheck className="w-5 h-5 text-amber-500" />
+            MOT Alerts
+          </h2>
+          <div className="space-y-2">
+            {motAlerts.map(({ vehicle, daysUntil }) => {
+              const level = getMotAlertLevel(daysUntil);
+              const styles = MOT_ALERT_STYLES[level];
+              return (
+                <div
+                  key={vehicle.id}
+                  className={`flex items-center justify-between p-3 rounded-lg border-l-4 ${styles.border} ${styles.bg}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2 py-0.5 text-xs font-bold rounded ${styles.badge}`}>
+                      {level === 'overdue' ? 'OVERDUE' : level.toUpperCase()}
+                    </span>
+                    <span className="font-mono font-bold text-slate-900">{vehicle.registration}</span>
+                    <span className={`text-sm ${styles.text}`}>{getMotAlertLabel(daysUntil)}</span>
+                  </div>
+                  <button
+                    onClick={() => onRecordMot(vehicle)}
+                    className="px-3 py-1 text-xs font-bold bg-white border border-slate-300 text-slate-700 rounded hover:bg-slate-50 whitespace-nowrap"
+                  >
+                    Record MOT
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* PMI Alerts */}
+      {pmiAlerts.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
+            <Wrench className="w-5 h-5 text-amber-500" />
+            PMI Alerts
+          </h2>
+          <div className="space-y-2">
+            {pmiAlerts.map(({ vehicle, daysUntil }) => {
+              const level = getPmiAlertLevel(daysUntil);
+              const styles = PMI_ALERT_STYLES[level];
+              return (
+                <div
+                  key={vehicle.id}
+                  className={`flex items-center justify-between p-3 rounded-lg border-l-4 ${styles.border} ${styles.bg}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2 py-0.5 text-xs font-bold rounded ${styles.badge}`}>
+                      {level === 'overdue' ? 'OVERDUE' : level.toUpperCase()}
+                    </span>
+                    <span className="font-mono font-bold text-slate-900">{vehicle.registration}</span>
+                    <span className={`text-sm ${styles.text}`}>{getPmiAlertLabel(daysUntil)}</span>
+                  </div>
+                  <button
+                    onClick={() => onRecordPmi(vehicle)}
+                    className="px-3 py-1 text-xs font-bold bg-white border border-slate-300 text-slate-700 rounded hover:bg-slate-50 whitespace-nowrap"
+                  >
+                    Record PMI
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Vehicle Grid */}
       <h2 className="text-lg font-bold text-slate-900 mb-4">Vehicle Status</h2>
@@ -544,18 +757,45 @@ function VehicleStatusCard({ vehicle, check }: VehicleStatusCardProps) {
 // VehiclesView Component
 // ============================================================================
 
+type VehicleSort = 'registration' | 'mot_due' | 'pmi_due' | 'status';
+
 interface VehiclesViewProps {
   vehicles: Vehicle[];
   onAdd: () => void;
   onEdit: (vehicle: Vehicle) => void;
+  onRecordMot: (vehicle: Vehicle) => void;
+  onRecordPmi: (vehicle: Vehicle) => void;
 }
 
-function VehiclesView({ vehicles, onAdd, onEdit }: VehiclesViewProps) {
+function VehiclesView({ vehicles, onAdd, onEdit, onRecordMot, onRecordPmi }: VehiclesViewProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<VehicleStatus | 'all'>('all');
+  const [sortBy, setSortBy] = useState<VehicleSort>('registration');
   const [expandedVehicleId, setExpandedVehicleId] = useState<string | null>(null);
 
-  const filtered = vehicles.filter((v) => {
+  const nullLast = (a: string | null, b: string | null): number => {
+    if (a === null && b === null) return 0;
+    if (a === null) return 1;
+    if (b === null) return -1;
+    return a < b ? -1 : a > b ? 1 : 0;
+  };
+
+  const sorted = [...vehicles].sort((a, b) => {
+    switch (sortBy) {
+      case 'mot_due':
+        return nullLast(a.mot_due_date, b.mot_due_date);
+      case 'pmi_due':
+        return nullLast(a.next_pmi_due_date, b.next_pmi_due_date);
+      case 'status': {
+        const order = { active: 0, vor: 1, retired: 2 };
+        return order[a.status] - order[b.status];
+      }
+      default:
+        return a.registration.localeCompare(b.registration);
+    }
+  });
+
+  const filtered = sorted.filter((v) => {
     const matchesSearch =
       v.registration.toLowerCase().includes(search.toLowerCase()) ||
       (v.make?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
@@ -582,7 +822,7 @@ function VehiclesView({ vehicles, onAdd, onEdit }: VehiclesViewProps) {
         </button>
       </div>
 
-      {/* Search and Filter */}
+      {/* Search, Filter and Sort */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -606,6 +846,19 @@ function VehiclesView({ vehicles, onAdd, onEdit }: VehiclesViewProps) {
             </option>
           ))}
         </select>
+        <div className="relative">
+          <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as VehicleSort)}
+            className="pl-9 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none bg-white"
+          >
+            <option value="registration">Registration A–Z</option>
+            <option value="mot_due">MOT Due</option>
+            <option value="pmi_due">PMI Due</option>
+            <option value="status">Status</option>
+          </select>
+        </div>
       </div>
 
       {/* Vehicle Cards */}
@@ -704,26 +957,28 @@ function VehiclesView({ vehicles, onAdd, onEdit }: VehiclesViewProps) {
                       {/* MOT Due */}
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-slate-500">MOT Due</span>
-                        <span className={`${
-                          vehicle.mot_due_date && new Date(vehicle.mot_due_date) < new Date()
-                            ? 'text-red-600 font-medium'
-                            : 'text-slate-900'
-                        }`}>
-                          {vehicle.mot_due_date
-                            ? new Date(vehicle.mot_due_date).toLocaleDateString()
-                            : 'Not set'}
-                        </span>
+                        {vehicle.mot_due_date ? (() => {
+                          const d = getMotDaysUntil(vehicle.mot_due_date);
+                          const cls = d < 0 ? 'text-red-600 font-medium' : d <= 14 ? 'text-amber-600 font-medium' : 'text-slate-900';
+                          return <span className={cls}>{new Date(vehicle.mot_due_date).toLocaleDateString('en-GB')}</span>;
+                        })() : <span className="text-slate-400">Not set</span>}
                       </div>
 
-                      {/* Next PMI */}
-                      {vehicle.next_pmi_due_date && (
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-slate-500">Next PMI</span>
-                          <span className="text-slate-900">
-                            {new Date(vehicle.next_pmi_due_date).toLocaleDateString()}
-                          </span>
-                        </div>
-                      )}
+                      {/* PMI Interval */}
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500">PMI Interval</span>
+                        <span className="text-slate-900">Every {vehicle.pmi_interval_weeks ?? 6} weeks</span>
+                      </div>
+
+                      {/* Next PMI Due */}
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500">Next PMI Due</span>
+                        {vehicle.next_pmi_due_date ? (() => {
+                          const d = getMotDaysUntil(vehicle.next_pmi_due_date);
+                          const cls = d < 0 ? 'text-red-600 font-medium' : d <= 7 ? 'text-amber-600 font-medium' : 'text-slate-900';
+                          return <span className={cls}>{new Date(vehicle.next_pmi_due_date).toLocaleDateString('en-GB')}</span>;
+                        })() : <span className="text-slate-400">Not set</span>}
+                      </div>
 
                       {/* Status Notes */}
                       {vehicle.status_notes && (
@@ -735,13 +990,29 @@ function VehiclesView({ vehicles, onAdd, onEdit }: VehiclesViewProps) {
                         </div>
                       )}
 
-                      {/* Edit Button */}
-                      <button
-                        onClick={() => onEdit(vehicle)}
-                        className="w-full mt-2 py-2 px-4 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition-colors text-sm"
-                      >
-                        Edit Vehicle
-                      </button>
+                      {/* Action Buttons */}
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <button
+                          onClick={() => onEdit(vehicle)}
+                          className="flex-1 py-2 px-3 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition-colors text-sm"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => onRecordMot(vehicle)}
+                          className="flex-1 py-2 px-3 bg-orange-500 text-white font-medium rounded-lg hover:bg-orange-600 transition-colors text-sm flex items-center justify-center gap-1"
+                        >
+                          <ClipboardCheck className="w-3 h-3" />
+                          MOT
+                        </button>
+                        <button
+                          onClick={() => onRecordPmi(vehicle)}
+                          className="flex-1 py-2 px-3 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors text-sm flex items-center justify-center gap-1"
+                        >
+                          <Wrench className="w-3 h-3" />
+                          PMI
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1434,9 +1705,21 @@ function DefectsView({ defects, onRefresh }: DefectsViewProps) {
                       "{defect.driver_notes}"
                     </div>
                   )}
-                  <div className="text-xs text-slate-400 mt-2">
-                    Reported by {defect.reported_by_name} •{' '}
-                    {new Date(defect.reported_at).toLocaleString()}
+                  <div className="text-xs text-slate-400 mt-2 flex items-center gap-1">
+                    {defect.mot_record_id ? (
+                      <>
+                        <ClipboardCheck className="w-3 h-3" />
+                        MOT Issue — recorded by {defect.reported_by_name}
+                      </>
+                    ) : defect.pmi_record_id ? (
+                      <>
+                        <Wrench className="w-3 h-3" />
+                        PMI Issue — recorded by {defect.reported_by_name}
+                      </>
+                    ) : (
+                      <>Reported by {defect.reported_by_name}</>
+                    )}
+                    {' • '}{new Date(defect.reported_at).toLocaleString()}
                   </div>
                 </div>
                 <button

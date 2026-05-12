@@ -33,6 +33,9 @@ interface AdditionalVehicle {
   vehicleType: VehicleType;
   make: string;
   model: string;
+  motDueDate: string;
+  nextPmiDueDate: string;
+  pmiIntervalWeeks: number;
 }
 
 export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
@@ -56,6 +59,9 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
   const [vehicleType, setVehicleType] = useState<VehicleType>('tipper');
   const [vehicleMake, setVehicleMake] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
+  const [vehicleMotDue, setVehicleMotDue] = useState('');
+  const [vehicleNextPmi, setVehicleNextPmi] = useState('');
+  const [vehiclePmiInterval, setVehiclePmiInterval] = useState(6);
 
   // Additional vehicles
   const [additionalVehicles, setAdditionalVehicles] = useState<AdditionalVehicle[]>([]);
@@ -64,6 +70,9 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
   const [newVehicleType, setNewVehicleType] = useState<VehicleType>('tipper');
   const [newVehicleMake, setNewVehicleMake] = useState('');
   const [newVehicleModel, setNewVehicleModel] = useState('');
+  const [newVehicleMotDue, setNewVehicleMotDue] = useState('');
+  const [newVehicleNextPmi, setNewVehicleNextPmi] = useState('');
+  const [newVehiclePmiInterval, setNewVehiclePmiInterval] = useState(6);
 
   // Handle return from Stripe checkout
   useEffect(() => {
@@ -231,6 +240,9 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
           vehicle_type: vehicleType,
           make: vehicleMake.trim() || null,
           model: vehicleModel.trim() || null,
+          mot_due_date: vehicleMotDue || null,
+          next_pmi_due_date: vehicleNextPmi || null,
+          pmi_interval_weeks: vehiclePmiInterval,
           status: 'active',
           created_by: userId,
         });
@@ -280,6 +292,9 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
           vehicle_type: newVehicleType,
           make: newVehicleMake.trim() || null,
           model: newVehicleModel.trim() || null,
+          mot_due_date: newVehicleMotDue || null,
+          next_pmi_due_date: newVehicleNextPmi || null,
+          pmi_interval_weeks: newVehiclePmiInterval,
           status: 'active',
           created_by: createdUserId,
         });
@@ -294,6 +309,9 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
           vehicleType: newVehicleType,
           make: newVehicleMake.trim(),
           model: newVehicleModel.trim(),
+          motDueDate: newVehicleMotDue,
+          nextPmiDueDate: newVehicleNextPmi,
+          pmiIntervalWeeks: newVehiclePmiInterval,
         },
       ]);
 
@@ -302,6 +320,9 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
       setNewVehicleType('tipper');
       setNewVehicleMake('');
       setNewVehicleModel('');
+      setNewVehicleMotDue('');
+      setNewVehicleNextPmi('');
+      setNewVehiclePmiInterval(6);
       setShowAddVehicleForm(false);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to add vehicle';
@@ -597,6 +618,45 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
               </div>
             </div>
 
+            {/* MOT & PMI — optional, can be set later */}
+            <div className="border-t border-slate-700 pt-4">
+              <p className="text-xs font-bold text-slate-400 uppercase mb-3">
+                MOT & PMI <span className="text-slate-600 normal-case font-normal">(optional — can be set later)</span>
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-400 uppercase">MOT Due Date</label>
+                  <input
+                    type="date"
+                    value={vehicleMotDue}
+                    onChange={(e) => setVehicleMotDue(e.target.value)}
+                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-400 uppercase">Next PMI Due</label>
+                  <input
+                    type="date"
+                    value={vehicleNextPmi}
+                    onChange={(e) => setVehicleNextPmi(e.target.value)}
+                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                  />
+                </div>
+                <div className="col-span-2 space-y-1">
+                  <label className="text-xs font-bold text-slate-400 uppercase">PMI Interval (weeks)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={52}
+                    value={vehiclePmiInterval}
+                    onChange={(e) => setVehiclePmiInterval(Math.max(1, parseInt(e.target.value) || 6))}
+                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                  />
+                  <p className="text-xs text-slate-500">Default is 6 weeks — adjust for your vehicle type and usage</p>
+                </div>
+              </div>
+            </div>
+
             <div className="pt-4 space-y-3">
               <button
                 type="submit"
@@ -719,6 +779,32 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
                     className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                     placeholder="Model (optional)"
                   />
+                  <input
+                    type="date"
+                    value={newVehicleMotDue}
+                    onChange={(e) => setNewVehicleMotDue(e.target.value)}
+                    className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                    title="MOT Due Date (optional)"
+                  />
+                  <input
+                    type="date"
+                    value={newVehicleNextPmi}
+                    onChange={(e) => setNewVehicleNextPmi(e.target.value)}
+                    className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                    title="Next PMI Due (optional)"
+                  />
+                  <div className="col-span-2 flex items-center gap-2">
+                    <span className="text-xs text-slate-400 whitespace-nowrap">PMI every</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={52}
+                      value={newVehiclePmiInterval}
+                      onChange={(e) => setNewVehiclePmiInterval(Math.max(1, parseInt(e.target.value) || 6))}
+                      className="w-16 px-2 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-center focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                    />
+                    <span className="text-xs text-slate-400">weeks</span>
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <button

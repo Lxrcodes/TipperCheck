@@ -25,6 +25,8 @@ export function VehicleModal({ vehicle, orgId, userId, onClose, onSaved }: Vehic
   const [oLicenceNumber, setOLicenceNumber] = useState(vehicle?.o_licence_number ?? '');
   const [motDueDate, setMotDueDate] = useState(vehicle?.mot_due_date ?? '');
   const [lastPmiDate, setLastPmiDate] = useState(vehicle?.last_pmi_date ?? '');
+  const [nextPmiDueDate, setNextPmiDueDate] = useState(vehicle?.next_pmi_due_date ?? '');
+  const [pmiIntervalWeeks, setPmiIntervalWeeks] = useState(vehicle?.pmi_interval_weeks ?? 6);
   const [status, setStatus] = useState<VehicleStatus>(vehicle?.status ?? 'active');
   const [statusNotes, setStatusNotes] = useState(vehicle?.status_notes ?? '');
 
@@ -50,6 +52,8 @@ export function VehicleModal({ vehicle, orgId, userId, onClose, onSaved }: Vehic
         o_licence_number: oLicenceNumber.trim() || null,
         mot_due_date: motDueDate || null,
         last_pmi_date: lastPmiDate || null,
+        next_pmi_due_date: nextPmiDueDate || null,
+        pmi_interval_weeks: pmiIntervalWeeks,
         status,
         status_notes: statusNotes.trim() || null,
         status_changed_at: vehicle?.status !== status ? new Date().toISOString() : vehicle?.status_changed_at,
@@ -197,6 +201,10 @@ export function VehicleModal({ vehicle, orgId, userId, onClose, onSaved }: Vehic
               />
             </div>
 
+            <div className="col-span-2 border-t border-slate-100 pt-3">
+              <p className="text-xs font-bold text-slate-400 uppercase mb-3">MOT & PMI</p>
+            </div>
+
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-500 uppercase">MOT Due Date</label>
               <input
@@ -215,6 +223,31 @@ export function VehicleModal({ vehicle, orgId, userId, onClose, onSaved }: Vehic
                 onChange={(e) => setLastPmiDate(e.target.value)}
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
               />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-500 uppercase">Next PMI Due</label>
+              <input
+                type="date"
+                value={nextPmiDueDate}
+                onChange={(e) => setNextPmiDueDate(e.target.value)}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-500 uppercase">
+                PMI Interval (weeks)
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={52}
+                value={pmiIntervalWeeks}
+                onChange={(e) => setPmiIntervalWeeks(Math.max(1, parseInt(e.target.value) || 6))}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+              />
+              <p className="text-xs text-slate-400">Used to calculate next PMI when recording an inspection</p>
             </div>
 
             <div className="col-span-2 space-y-1">

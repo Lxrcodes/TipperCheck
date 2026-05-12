@@ -29,6 +29,10 @@ export type SubscriptionStatus = 'trialing' | 'active' | 'canceled' | 'past_due'
 
 export type InviteStatus = 'pending' | 'accepted' | 'expired' | 'revoked';
 
+export type MotResult = 'pass' | 'fail';
+
+export type PmiResult = 'pass' | 'fail';
+
 export type SyncStatus = 'synced' | 'pending' | 'failed';
 
 // ----------------------------------------------------------------------------
@@ -95,6 +99,7 @@ export interface Vehicle {
   mot_due_date: string | null;
   last_pmi_date: string | null;
   next_pmi_due_date: string | null;
+  pmi_interval_weeks: number;
   status: VehicleStatus;
   status_changed_at: string | null;
   status_changed_by: string | null;
@@ -149,11 +154,48 @@ export interface CheckRun {
 }
 
 /**
- * Defect - extracted from check runs for workflow tracking.
+ * PmiRecord - immutable log of a PMI inspection on a vehicle.
+ */
+export interface PmiRecord {
+  id: string;
+  org_id: string;
+  vehicle_id: string;
+  vehicle_registration: string;
+  pmi_date: string;
+  next_due_date: string;
+  interval_weeks: number;
+  result: PmiResult;
+  advisory_notes: string | null;
+  recorded_by: string | null;
+  recorded_by_name: string;
+  created_at: string;
+}
+
+/**
+ * MotRecord - immutable log of an MOT test on a vehicle.
+ */
+export interface MotRecord {
+  id: string;
+  org_id: string;
+  vehicle_id: string;
+  vehicle_registration: string;
+  mot_date: string;
+  expiry_date: string;
+  result: MotResult;
+  advisory_notes: string | null;
+  recorded_by: string | null;
+  recorded_by_name: string;
+  created_at: string;
+}
+
+/**
+ * Defect - extracted from check runs or MOT tests for workflow tracking.
  */
 export interface Defect {
   id: string;
-  check_run_id: string;
+  check_run_id: string | null;
+  mot_record_id: string | null;
+  pmi_record_id: string | null;
   org_id: string;
   vehicle_id: string;
   // Denormalized
