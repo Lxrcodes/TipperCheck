@@ -102,10 +102,15 @@ export function UserModal({ user, orgId, currentUserId, onClose, onSaved }: User
           status: 'pending',
         });
 
+        // Send invite email
+        const inviteUrl = `${window.location.origin}/invite/${inviteToken}`;
+        await supabase.functions.invoke('send-invite-email', {
+          body: { email: email.trim().toLowerCase(), name: name.trim(), inviteUrl },
+        });
+
         // Store invite token to show the link
         setInviteToken(inviteToken);
         setInviteSent(true);
-        // Don't auto-close - let the manager copy the link first
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to save user';
@@ -131,6 +136,12 @@ export function UserModal({ user, orgId, currentUserId, onClose, onSaved }: User
           invite_sent_at: new Date().toISOString(),
         })
         .eq('id', user.id);
+
+      // Send invite email
+      const inviteUrl = `${window.location.origin}/invite/${newInviteToken}`;
+      await supabase.functions.invoke('send-invite-email', {
+        body: { email: user.email, name: user.name, inviteUrl },
+      });
 
       // Show the new invite link
       setInviteToken(newInviteToken);
