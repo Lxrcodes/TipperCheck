@@ -80,7 +80,7 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
   const [startedAt, setStartedAt] = useState<Date | null>(null);
   const [gpsStart, setGpsStart] = useState<GpsCoordinates | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
-  const [submittedDriverName, setSubmittedDriverName] = useState(driverName);
+  const [submittedDriverName, setSubmittedDriverName] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeDefectItem, setActiveDefectItem] = useState<CheckItem | null>(null);
@@ -1138,9 +1138,6 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
               className="w-full px-4 py-3 border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
               placeholder="Enter your name"
             />
-            <p className="text-xs text-slate-400 mt-1">
-              Edit if someone else is completing this check
-            </p>
           </div>
 
           <div className="bg-white rounded-lg p-4 shadow-sm">
