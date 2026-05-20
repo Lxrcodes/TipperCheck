@@ -23,62 +23,28 @@ export function AcceptInvite() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Validate invite token on load
   useEffect(() => {
     if (!token) {
       setError('Invalid invite link');
       setLoading(false);
       return;
     }
-
     validateInvite();
   }, [token]);
 
   const validateInvite = async () => {
     try {
-      // Find user with this invite token
-      const { data: user, error: userError } = await supabase
-        .from('users')
-        .select('email, name, org_id, invite_token, invite_sent_at, invite_accepted_at')
-        .eq('invite_token', token)
-        .single();
-
-      if (userError || !user) {
-        setError('This invite link is invalid or has expired.');
-        setLoading(false);
-        return;
-      }
-
-      // Check if already accepted
-      if (user.invite_accepted_at) {
-        setError('This invite has already been used. Please log in instead.');
-        setLoading(false);
-        return;
-      }
-
-      // Check if invite expired (7 days)
-      const inviteSentAt = new Date(user.invite_sent_at);
-      const now = new Date();
-      const daysSinceInvite = (now.getTime() - inviteSentAt.getTime()) / (1000 * 60 * 60 * 24);
-
-      if (daysSinceInvite > 7) {
-        setError('This invite link has expired. Please ask your manager to send a new one.');
-        setLoading(false);
-        return;
-      }
-
-      // Get org name
-      const { data: org } = await supabase
-        .from('organisations')
-        .select('name')
-        .eq('id', user.org_id)
-        .single();
-
-      setInviteData({
-        email: user.email,
-        name: user.name,
-        orgName: org?.name ?? 'your company',
+      const { data, error } = await supabase.functions.invoke('validate-invite', {
+        body: { token },
       });
+
+      if (error || data?.error) {
+        setError(data?.error ?? 'Failed to validate invite. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      setInviteData({ email: data.email, name: data.name, orgName: data.orgName });
       setLoading(false);
     } catch (err) {
       console.error('Error validating invite:', err);
@@ -106,36 +72,28 @@ export function AcceptInvite() {
     setError(null);
 
     try {
-      // Create auth account with Supabase
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email: inviteData.email,
+      // Create the auth account (email pre-confirmed, no confirmation email sent)
+      const { data, error: acceptError } = await supabase.functions.invoke('accept-invite', {
+        body: { token, password },
+      });
+
+      if (acceptError || data?.error) {
+        throw new Error(data?.error ?? 'Failed to create account');
+      }
+
+      // Sign in automatically with the new credentials
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: data.email,
         password,
       });
 
-      if (signUpError) throw signUpError;
-
-      if (!authData.user) {
-        throw new Error('Failed to create account');
-      }
-
-      // Update user record to mark invite as accepted and link auth_user_id
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          auth_user_id: authData.user.id,
-          invite_accepted_at: new Date().toISOString(),
-          invite_token: null, // Clear the token
-        })
-        .eq('invite_token', token);
-
-      if (updateError) throw updateError;
+      if (signInError) throw signInError;
 
       setSuccess(true);
 
-      // Redirect to app after brief delay
       setTimeout(() => {
         navigate('/');
-      }, 2000);
+      }, 1500);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to create account';
       setError(message);
@@ -144,7 +102,6 @@ export function AcceptInvite() {
     }
   };
 
-  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
@@ -156,7 +113,6 @@ export function AcceptInvite() {
     );
   }
 
-  // Error state
   if (error && !inviteData) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
@@ -177,7 +133,6 @@ export function AcceptInvite() {
     );
   }
 
-  // Success state
   if (success) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
@@ -192,7 +147,6 @@ export function AcceptInvite() {
     );
   }
 
-  // Main form
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -225,9 +179,7 @@ export function AcceptInvite() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-400 uppercase">
-              Create Password
-            </label>
+            <label className="text-xs font-bold text-slate-400 uppercase">Create Password</label>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
@@ -249,9 +201,7 @@ export function AcceptInvite() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-400 uppercase">
-              Confirm Password
-            </label>
+            <label className="text-xs font-bold text-slate-400 uppercase">Confirm Password</label>
             <input
               type={showPassword ? 'text' : 'password'}
               required
@@ -273,7 +223,7 @@ export function AcceptInvite() {
                 Creating Account...
               </>
             ) : (
-              'Create Account'
+              'Create Account & Sign In'
             )}
           </button>
         </form>
