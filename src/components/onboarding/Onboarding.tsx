@@ -764,20 +764,24 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
                     className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                     placeholder="Model (optional)"
                   />
-                  <input
-                    type="date"
-                    value={newVehicleMotDue}
-                    onChange={(e) => setNewVehicleMotDue(e.target.value)}
-                    className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
-                    title="MOT Due Date (optional)"
-                  />
-                  <input
-                    type="date"
-                    value={newVehicleNextPmi}
-                    onChange={(e) => setNewVehicleNextPmi(e.target.value)}
-                    className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
-                    title="Next PMI Due (optional)"
-                  />
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">MOT Due Date</label>
+                    <input
+                      type="date"
+                      value={newVehicleMotDue}
+                      onChange={(e) => setNewVehicleMotDue(e.target.value)}
+                      className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Next PMI Due</label>
+                    <input
+                      type="date"
+                      value={newVehicleNextPmi}
+                      onChange={(e) => setNewVehicleNextPmi(e.target.value)}
+                      className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                    />
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <button
