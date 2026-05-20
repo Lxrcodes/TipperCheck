@@ -219,9 +219,9 @@ export function UserModal({ user, orgId, currentUserId, onClose, onSaved }: User
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Mail className="w-8 h-8 text-green-600" />
             </div>
-            <h2 className="text-lg font-bold text-slate-900 mb-2">Invite Created!</h2>
+            <h2 className="text-lg font-bold text-slate-900 mb-2">Invite Sent!</h2>
             <p className="text-slate-600">
-              Share this link with <strong>{name}</strong> to let them set up their account.
+              An invite email has been sent to <strong>{name}</strong>. You can also share the link below directly.
             </p>
           </div>
 

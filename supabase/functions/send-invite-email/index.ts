@@ -25,6 +25,20 @@ serve(async (req) => {
       );
     }
 
+    const displayName = name ?? email;
+
+    const html = `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
+        <img src="https://checkatruck.co.uk/logo.png" alt="CheckaTruck" style="height:40px;margin-bottom:24px" />
+        <h1 style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 12px">You've been invited to CheckaTruck</h1>
+        <p style="color:#475569;margin:0 0 24px">Hi ${displayName}, your manager has added you to their fleet. Click the button below to set up your account.</p>
+        <a href="${inviteUrl}" style="display:inline-block;background:#f97316;color:#fff;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;margin-bottom:24px">
+          Set Up My Account
+        </a>
+        <p style="color:#94a3b8;font-size:13px;margin:0">This link expires in 7 days. If you weren't expecting this, you can ignore it.</p>
+      </div>
+    `;
+
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -35,11 +49,7 @@ serve(async (req) => {
         from: FROM_EMAIL,
         to: [email],
         subject: "You've been invited to CheckaTruck",
-        template: 'team-invitation',
-        variables: {
-          name: name ?? email,
-          invite_url: inviteUrl,
-        },
+        html,
       }),
     });
 
