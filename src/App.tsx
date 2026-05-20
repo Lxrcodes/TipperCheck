@@ -452,7 +452,6 @@ function DriverHome({ user, org, onCheckComplete }: DriverHomeProps) {
   return (
     <CheckWizard
       driverId={user.id}
-      driverName={user.name}
       driverEmail={user.email}
       orgId={org.id}
       onComplete={onCheckComplete}

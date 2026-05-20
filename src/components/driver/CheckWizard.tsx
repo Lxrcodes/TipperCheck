@@ -58,7 +58,6 @@ type WizardStep =
 
 interface CheckWizardProps {
   driverId: string;
-  driverName: string;
   driverEmail: string;
   orgId: string;
   onComplete: (status: CheckStatus) => void;
@@ -68,7 +67,7 @@ interface CheckWizardProps {
 // CheckWizard Component
 // ============================================================================
 
-export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComplete }: CheckWizardProps) {
+export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckWizardProps) {
   // State
   const [step, setStep] = useState<WizardStep>('select_vehicle');
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
