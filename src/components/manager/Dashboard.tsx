@@ -1768,11 +1768,11 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Calculate billing - all vehicles are billed at 70p/week
-  const PRICE_PER_VEHICLE_WEEKLY = 0.70;
+  // Calculate billing - all vehicles are billed at £36.40/year
+  const PRICE_PER_VEHICLE_YEARLY = 36.40;
   const billableVehicles = activeVehicleCount;
-  const weeklyTotal = billableVehicles * PRICE_PER_VEHICLE_WEEKLY;
-  const monthlyEstimate = weeklyTotal * 4.33; // Average weeks per month
+  const yearlyTotal = billableVehicles * PRICE_PER_VEHICLE_YEARLY;
+  const yearlyTotalWithVat = yearlyTotal * 1.20;
 
   const periodEndDate = org.current_period_end
     ? new Date(org.current_period_end).toLocaleDateString('en-GB', {
@@ -2112,7 +2112,7 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
           {/* Pricing Info */}
           <div className="bg-slate-50 rounded-lg p-4 mb-4">
             <div className="text-sm text-slate-600">
-              <span className="font-bold text-slate-900">70p</span> per vehicle per week
+              <span className="font-bold text-slate-900">£36.40</span> per vehicle per year
             </div>
           </div>
 
@@ -2125,12 +2125,12 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
             {billableVehicles > 0 && (
               <>
                 <div className="border-t border-slate-200 pt-3 flex items-center justify-between">
-                  <span className="text-sm text-slate-600">Weekly Total</span>
-                  <span className="font-bold text-slate-900">£{weeklyTotal.toFixed(2)}</span>
+                  <span className="text-sm text-slate-600">Yearly Total (ex. VAT)</span>
+                  <span className="font-bold text-slate-900">£{yearlyTotal.toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between text-slate-500">
-                  <span className="text-sm">Monthly Estimate</span>
-                  <span className="text-sm">~£{monthlyEstimate.toFixed(2)}</span>
+                  <span className="text-sm">Yearly Total (inc. VAT)</span>
+                  <span className="text-sm">£{yearlyTotalWithVat.toFixed(2)}</span>
                 </div>
               </>
             )}

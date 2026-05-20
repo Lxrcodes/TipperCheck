@@ -55,6 +55,7 @@ export interface Organisation {
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   active_vehicle_count: number;
+  is_demo: boolean;
   created_at: string;
   updated_at: string;
 }

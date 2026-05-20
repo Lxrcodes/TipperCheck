@@ -355,9 +355,9 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
 
   // Calculate total vehicles and pricing with VAT
   const totalVehicles = 1 + additionalVehicles.length;
-  const weeklySubtotal = totalVehicles * 0.70;
-  const weeklyVat = weeklySubtotal * 0.20;
-  const weeklyTotal = (weeklySubtotal + weeklyVat).toFixed(2);
+  const yearlySubtotal = totalVehicles * 36.40;
+  const yearlyVat = yearlySubtotal * 0.20;
+  const yearlyTotal = (yearlySubtotal + yearlyVat).toFixed(2);
 
   // ============================================================================
   // Step: Type Selection
@@ -814,20 +814,20 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
             </div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-slate-400">Price per vehicle</span>
-              <span className="text-white">70p/week</span>
+              <span className="text-white">£36.40/year</span>
             </div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-slate-400">Subtotal</span>
-              <span className="text-white">£{weeklySubtotal.toFixed(2)}</span>
+              <span className="text-white">£{yearlySubtotal.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-slate-400">VAT (20%)</span>
-              <span className="text-white">£{weeklyVat.toFixed(2)}</span>
+              <span className="text-white">£{yearlyVat.toFixed(2)}</span>
             </div>
             <div className="border-t border-slate-700 pt-2 mt-2">
               <div className="flex items-center justify-between">
-                <span className="text-white font-bold">Weekly total</span>
-                <span className="text-orange-500 font-bold text-lg">£{weeklyTotal}</span>
+                <span className="text-white font-bold">Yearly total</span>
+                <span className="text-orange-500 font-bold text-lg">£{yearlyTotal}</span>
               </div>
               <p className="text-slate-500 text-xs mt-1">Inc. VAT</p>
             </div>

@@ -24,10 +24,10 @@ export function isStripeConfigured(): boolean {
 // ============================================================================
 
 export const PRICING = {
-  // 70p per vehicle per week
+  // 70p per vehicle per week, billed annually
   PRICE_PER_VEHICLE_WEEKLY: 0.70,
-  // Approximately £3.03 per month (70p * 52 weeks / 12 months)
-  PRICE_PER_VEHICLE_MONTHLY: 3.03,
+  // £36.40 per vehicle per year (70p * 52 weeks)
+  PRICE_PER_VEHICLE_YEARLY: 36.40,
   // No free vehicles - all vehicles are billed
   FREE_VEHICLES: 0,
   // Currency

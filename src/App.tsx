@@ -123,13 +123,14 @@ function AppContent() {
         return;
       }
 
-      // Check for canceled subscription - block all users
+      // Check for canceled subscription - block all users (demo orgs are exempt)
       // Also check if subscription period has ended (fallback if webhook didn't fire)
       const isSubscriptionExpired =
-        orgData.subscription_status === 'canceled' ||
-        (orgData.cancel_at_period_end &&
-         orgData.current_period_end &&
-         new Date(orgData.current_period_end) < new Date());
+        !orgData.is_demo &&
+        (orgData.subscription_status === 'canceled' ||
+         (orgData.cancel_at_period_end &&
+          orgData.current_period_end &&
+          new Date(orgData.current_period_end) < new Date()));
 
       if (isSubscriptionExpired) {
         setOrg(orgData);
@@ -148,8 +149,8 @@ function AppContent() {
       }
 
       // Check for incomplete payment (has org but no active subscription)
-      // Only check if user is billing admin (the one who needs to pay)
-      if (user.is_billing_admin && !orgData.subscription_status) {
+      // Only check if user is billing admin (the one who needs to pay). Demo orgs are exempt.
+      if (!orgData.is_demo && user.is_billing_admin && !orgData.subscription_status) {
         // Check if there are any active vehicles (meaning they started onboarding)
         const { count: vehicleCount } = await supabase
           .from('vehicles')
@@ -589,8 +590,8 @@ function SubscriptionExpired({
   }, [org.id]);
 
   const activeVehicles = vehicles.filter((v) => v.status === 'active');
-  const weeklyPrice = (activeVehicles.length * 0.7).toFixed(2);
-  const monthlyPrice = (activeVehicles.length * 0.7 * 4.33).toFixed(2);
+  const yearlyPrice = (activeVehicles.length * 36.40).toFixed(2);
+  const yearlyPriceWithVat = (activeVehicles.length * 36.40 * 1.20).toFixed(2);
 
   const handleAddVehicle = async () => {
     if (!newRegistration.trim()) return;
@@ -652,8 +653,8 @@ function SubscriptionExpired({
                 Resubscribe to restore access for your entire team
               </p>
               <div className="text-white">
-                <span className="text-2xl font-bold">70p</span>
-                <span className="text-slate-400 text-sm"> per vehicle per week</span>
+                <span className="text-2xl font-bold">£36.40</span>
+                <span className="text-slate-400 text-sm"> per vehicle per year</span>
               </div>
             </div>
 
@@ -799,12 +800,12 @@ function SubscriptionExpired({
             <span className="text-white font-bold">{activeVehicles.length}</span>
           </div>
           <div className="flex justify-between items-center mb-2">
-            <span className="text-slate-400">Weekly Cost</span>
-            <span className="text-white font-bold">£{weeklyPrice}</span>
+            <span className="text-slate-400">Yearly Cost (ex. VAT)</span>
+            <span className="text-white font-bold">£{yearlyPrice}</span>
           </div>
           <div className="flex justify-between items-center pt-2 border-t border-slate-700">
-            <span className="text-slate-400">Estimated Monthly</span>
-            <span className="text-orange-500 font-bold text-lg">£{monthlyPrice}</span>
+            <span className="text-slate-400">Yearly Total (inc. VAT)</span>
+            <span className="text-orange-500 font-bold text-lg">£{yearlyPriceWithVat}</span>
           </div>
         </div>
 
