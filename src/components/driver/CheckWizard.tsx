@@ -15,6 +15,7 @@ import {
   Clock,
   Fuel,
   AlertCircle,
+  Truck,
 } from 'lucide-react';
 import {
   savePendingCheck,
@@ -79,6 +80,7 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
   const [startedAt, setStartedAt] = useState<Date | null>(null);
   const [gpsStart, setGpsStart] = useState<GpsCoordinates | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
+  const [submittedDriverName, setSubmittedDriverName] = useState(driverName);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeDefectItem, setActiveDefectItem] = useState<CheckItem | null>(null);
@@ -412,7 +414,7 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
         vehicle_id: selectedVehicle.id,
         template_id: selectedTemplate.id,
         // Denormalized fields for audit trail
-        driver_name: driverName,
+        driver_name: submittedDriverName,
         driver_email: driverEmail,
         vehicle_registration: selectedVehicle.registration,
         vehicle_type: selectedVehicle.vehicle_type,
@@ -613,37 +615,65 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
   // Intro
   if (step === 'intro') {
     return (
-      <div className="min-h-screen bg-slate-100 p-4 flex flex-col">
-        <div className="flex-1">
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <h1 className="text-xl font-heading text-slate-900 mb-2">
-              Daily Check
-            </h1>
-            <div className="text-2xl font-bold text-orange-500 mb-4">
-              {selectedVehicle?.registration}
-            </div>
-
-            <div className="flex items-center gap-2 text-sm text-slate-500 mb-2">
-              <MapPin className="w-4 h-4" />
-              <span>Location will be recorded</span>
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-6">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-500 rounded-2xl mb-4">
+              <Truck className="w-10 h-10 text-white" />
             </div>
           </div>
-        </div>
 
-        <div className="mt-4 space-y-3">
-          <button
-            onClick={handleStartCheck}
-            className="w-full py-4 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors touch-target-lg flex items-center justify-center gap-2"
-          >
-            Start Check
-            <ChevronRight className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setStep('select_vehicle')}
-            className="w-full py-3 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition-colors"
-          >
-            Change Vehicle
-          </button>
+          <div className="bg-slate-800 rounded-xl p-4 mb-6 text-center">
+            <div className="text-3xl font-mono font-bold text-white tracking-wider">
+              {selectedVehicle?.registration}
+            </div>
+            <div className="text-slate-400 text-sm mt-1 capitalize">
+              {selectedVehicle?.vehicle_type?.replace(/_/g, ' ')}
+            </div>
+          </div>
+
+          <div className="bg-slate-800 rounded-lg p-4 mb-6">
+            <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">What you'll do:</h3>
+            <ul className="space-y-2 text-slate-300 text-sm">
+              <li className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-green-500" />
+                Take a photo of the registration plate
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-green-500" />
+                Walk around and check {selectedTemplate?.categories.length ?? '—'} areas
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-green-500" />
+                Note fuel level and any defects
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-green-500" />
+                Sign to confirm your check
+              </li>
+            </ul>
+          </div>
+
+          <div className="flex items-center gap-2 text-sm text-slate-500 mb-6 justify-center">
+            <MapPin className="w-4 h-4" />
+            <span>Location will be recorded</span>
+          </div>
+
+          <div className="space-y-3">
+            <button
+              onClick={handleStartCheck}
+              className="w-full py-4 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors touch-target-lg flex items-center justify-center gap-2"
+            >
+              Start Check
+              <ChevronRight className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setStep('select_vehicle')}
+              className="w-full py-3 bg-slate-700 text-slate-300 font-medium rounded-lg hover:bg-slate-600 transition-colors"
+            >
+              Change Vehicle
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -1090,14 +1120,33 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col">
         <div className="bg-white p-4 border-b border-slate-200">
-          <h2 className="text-lg font-bold text-slate-900">Driver Signature</h2>
+          <h2 className="text-lg font-bold text-slate-900">Driver Confirmation</h2>
           <p className="text-sm text-slate-500 mt-1">
-            I confirm this check was completed accurately
+            Confirm your name and sign to complete this check
           </p>
         </div>
 
-        <div className="flex-1 p-4">
+        <div className="flex-1 p-4 space-y-4">
           <div className="bg-white rounded-lg p-4 shadow-sm">
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
+              Driver Name
+            </label>
+            <input
+              type="text"
+              value={submittedDriverName}
+              onChange={(e) => setSubmittedDriverName(e.target.value)}
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+              placeholder="Enter your name"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              Edit if someone else is completing this check
+            </p>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 shadow-sm">
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
+              Signature
+            </label>
             <div className="border-2 border-dashed border-slate-300 rounded-lg overflow-hidden">
               <canvas
                 ref={signatureCanvasRef}
@@ -1130,7 +1179,7 @@ export function CheckWizard({ driverId, driverName, driverEmail, orgId, onComple
             </button>
             <button
               onClick={handleSubmit}
-              disabled={!signature || loading}
+              disabled={!signature || !submittedDriverName.trim() || loading}
               className="flex-1 py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
             >
               {loading ? (
