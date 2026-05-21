@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '@/services/supabaseClient';
 import { ToastProvider, useToast } from '@/components/shared/Toast';
@@ -42,6 +42,7 @@ function AppContent() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
   const [pendingOrgId, setPendingOrgId] = useState<string | null>(null);
+  const awaitingBillingRef = useRef(false);
 
   const offline = useOffline();
   const toast = useToast();
@@ -55,7 +56,10 @@ function AppContent() {
 
     if (billingStatus === 'success') {
       window.history.replaceState({}, '', window.location.pathname);
-      if (orgId) setPendingOrgId(orgId);
+      if (orgId) {
+        awaitingBillingRef.current = true;
+        setPendingOrgId(orgId);
+      }
       toast.showSuccess('Payment successful! Activating your subscription...');
     } else if (billingStatus === 'cancelled') {
       window.history.replaceState({}, '', window.location.pathname);
@@ -83,12 +87,14 @@ function AppContent() {
           .single();
 
         if (org?.subscription_status === 'active' || org?.subscription_status === 'trialing') {
+          awaitingBillingRef.current = false;
           setPendingOrgId(null);
           loadUserProfile(session.user);
           return;
         }
       }
-      // Webhook didn't fire in time — reload profile anyway (may show payment_required)
+      // Webhook didn't fire in time — clear flag and reload profile
+      awaitingBillingRef.current = false;
       setPendingOrgId(null);
       loadUserProfile(session.user);
     };
@@ -196,6 +202,11 @@ function AppContent() {
           .eq('status', 'active');
 
         if (vehicleCount && vehicleCount > 0) {
+          // If we just returned from Stripe, keep showing loading until polling confirms status
+          if (awaitingBillingRef.current) {
+            setView('loading');
+            return;
+          }
           // Has vehicles but no subscription - needs to complete payment
           setOrg(orgData);
           setAuthUser({

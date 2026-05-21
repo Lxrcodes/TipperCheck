@@ -1,14 +1,19 @@
-import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 
 export function PrivacyPage() {
-  const navigate = useNavigate();
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.close();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-900">
       <div className="max-w-3xl mx-auto px-4 py-8">
         <button
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
           className="flex items-center gap-2 text-slate-400 hover:text-white mb-8 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
