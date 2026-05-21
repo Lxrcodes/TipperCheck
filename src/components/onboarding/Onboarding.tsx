@@ -44,6 +44,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // Created IDs (after org/user/vehicle creation)
   const [createdOrgId, setCreatedOrgId] = useState<string | null>(null);
@@ -843,10 +844,31 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
             </div>
           </div>
 
+          {/* T&Cs agreement */}
+          <div className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              id="onboarding-terms"
+              checked={agreedToTerms}
+              onChange={(e) => setAgreedToTerms(e.target.checked)}
+              className="mt-1 w-4 h-4 rounded border-slate-600 bg-slate-800 text-orange-500 focus:ring-orange-500 focus:ring-offset-slate-900 cursor-pointer shrink-0"
+            />
+            <label htmlFor="onboarding-terms" className="text-sm text-slate-400 cursor-pointer">
+              I agree to the{' '}
+              <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300">
+                Terms and Conditions
+              </a>{' '}
+              and{' '}
+              <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300">
+                Privacy Policy
+              </a>
+            </label>
+          </div>
+
           {/* Continue to payment */}
           <button
             onClick={handleProceedToPayment}
-            disabled={loading}
+            disabled={loading || !agreedToTerms}
             className="w-full py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
           >
             {loading ? (

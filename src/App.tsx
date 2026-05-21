@@ -41,6 +41,7 @@ function AppContent() {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
+  const [pendingOrgId, setPendingOrgId] = useState<string | null>(null);
 
   const offline = useOffline();
   const toast = useToast();
@@ -50,17 +51,51 @@ function AppContent() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const billingStatus = params.get('billing');
+    const orgId = params.get('org_id');
 
     if (billingStatus === 'success') {
-      // Clear URL params and reload profile to check subscription status
       window.history.replaceState({}, '', window.location.pathname);
-      toast.showSuccess('Payment successful! Welcome to CheckaTruck.');
+      if (orgId) setPendingOrgId(orgId);
+      toast.showSuccess('Payment successful! Activating your subscription...');
     } else if (billingStatus === 'cancelled') {
-      // Clear URL params and show error
       window.history.replaceState({}, '', window.location.pathname);
       setPaymentError('Payment was cancelled. Please complete payment to continue.');
     }
   }, []);
+
+  // Poll for subscription activation after returning from Stripe
+  useEffect(() => {
+    if (!pendingOrgId || !session?.user) return;
+
+    let cancelled = false;
+    setView('loading');
+
+    const poll = async () => {
+      for (let i = 0; i < 10; i++) {
+        if (cancelled) return;
+        await new Promise((r) => setTimeout(r, 1500));
+        if (cancelled) return;
+
+        const { data: org } = await supabase
+          .from('organisations')
+          .select('subscription_status')
+          .eq('id', pendingOrgId)
+          .single();
+
+        if (org?.subscription_status === 'active' || org?.subscription_status === 'trialing') {
+          setPendingOrgId(null);
+          loadUserProfile(session.user);
+          return;
+        }
+      }
+      // Webhook didn't fire in time — reload profile anyway (may show payment_required)
+      setPendingOrgId(null);
+      loadUserProfile(session.user);
+    };
+
+    poll();
+    return () => { cancelled = true; };
+  }, [pendingOrgId, session]);
 
   // Check for existing session
   useEffect(() => {
