@@ -810,6 +810,12 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
             </button>
           )}
 
+          {/* Free trial banner */}
+          <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4 text-center">
+            <p className="text-green-400 font-bold text-sm">🎉 7-day free trial included</p>
+            <p className="text-green-300 text-xs mt-1">You won't be charged until your trial ends. Cancel anytime.</p>
+          </div>
+
           {/* Pricing summary */}
           <div className="bg-slate-800 rounded-lg p-4 mb-6">
             <div className="flex items-center justify-between mb-2">
@@ -833,7 +839,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
                 <span className="text-white font-bold">Yearly total</span>
                 <span className="text-orange-500 font-bold text-lg">£{yearlyTotal}</span>
               </div>
-              <p className="text-slate-500 text-xs mt-1">Inc. VAT</p>
+              <p className="text-slate-500 text-xs mt-1">Inc. VAT — due after 7-day free trial</p>
             </div>
           </div>
 
@@ -848,13 +854,13 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
             ) : (
               <>
                 <CreditCard className="w-5 h-5" />
-                Continue to Payment
+                Start Free Trial
               </>
             )}
           </button>
 
           <p className="text-center text-slate-500 text-xs mt-3">
-            You can add more vehicles anytime from the dashboard
+            Card details required to start — no charge for 7 days
           </p>
         </div>
       </div>
@@ -883,9 +889,9 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
               <div className="inline-flex items-center justify-center w-20 h-20 bg-orange-500/10 rounded-full mb-6">
                 <CreditCard className="w-10 h-10 text-orange-500" />
               </div>
-              <h1 className="text-2xl font-heading text-white mb-2">Complete Your Subscription</h1>
+              <h1 className="text-2xl font-heading text-white mb-2">Start Your Free Trial</h1>
               <p className="text-slate-400 mb-6">
-                Your account is ready. Complete payment to start using CheckaTruck.
+                Your account is ready. Enter your card details to start your 7-day free trial — you won't be charged until it ends.
               </p>
 
               {error && (
