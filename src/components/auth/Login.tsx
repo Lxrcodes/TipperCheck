@@ -12,6 +12,7 @@ export function Login({ onSuccess }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,17 +20,27 @@ export function Login({ onSuccess }: LoginProps) {
     setIsLoading(true);
 
     try {
-      const { error: loginError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (loginError) {
-        if (loginError.message === 'Invalid login credentials') {
-          throw new Error('Invalid email or password. Please try again.');
+      if (mode === 'login') {
+        const { error: loginError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (loginError) {
+          if (loginError.message === 'Invalid login credentials') {
+            throw new Error('Invalid email or password. Please try again.');
+          }
+          throw loginError;
         }
-        throw loginError;
+        onSuccess();
+      } else {
+        const { error: signupError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: window.location.origin },
+        });
+        if (signupError) throw signupError;
+        alert('Check your email to confirm your account!');
       }
-      onSuccess();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'An error occurred';
       setError(message);
@@ -89,7 +100,7 @@ export function Login({ onSuccess }: LoginProps) {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-10 pr-12 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                   placeholder="••••••••"
-                  autoComplete="current-password"
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                   minLength={6}
                 />
                 <button
@@ -109,9 +120,27 @@ export function Login({ onSuccess }: LoginProps) {
             className="w-full flex items-center justify-center gap-2 py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-target"
           >
             {isLoading && <Loader2 className="w-5 h-5 animate-spin" />}
-            Sign In
+            {mode === 'login' ? 'Sign In' : 'Create Account'}
           </button>
         </form>
+
+        <div className="mt-6 text-center">
+          {mode === 'login' ? (
+            <p className="text-slate-500 text-sm">
+              Don't have an account?{' '}
+              <button onClick={() => { setMode('signup'); setError(null); }} className="text-orange-400 hover:text-orange-300">
+                Sign up
+              </button>
+            </p>
+          ) : (
+            <p className="text-slate-500 text-sm">
+              Already have an account?{' '}
+              <button onClick={() => { setMode('login'); setError(null); }} className="text-orange-400 hover:text-orange-300">
+                Sign in
+              </button>
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
