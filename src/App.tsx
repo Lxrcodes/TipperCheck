@@ -42,6 +42,7 @@ function AppContent() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
   const [pendingOrgId, setPendingOrgId] = useState<string | null>(null);
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const awaitingBillingRef = useRef(false);
 
   const offline = useOffline();
@@ -56,9 +57,11 @@ function AppContent() {
 
     if (billingStatus === 'success') {
       window.history.replaceState({}, '', window.location.pathname);
+      const sessionId = params.get('session_id');
       if (orgId) {
         awaitingBillingRef.current = true;
         setPendingOrgId(orgId);
+        if (sessionId) setPendingSessionId(sessionId);
       }
       toast.showSuccess('Payment successful! Activating your subscription...');
     } else if (billingStatus === 'cancelled') {
@@ -67,41 +70,45 @@ function AppContent() {
     }
   }, []);
 
-  // Poll for subscription activation after returning from Stripe
+  // Verify subscription directly with Stripe after returning from checkout
   useEffect(() => {
-    if (!pendingOrgId || !session?.user) return;
+    if (!pendingOrgId || !pendingSessionId || !session?.user) return;
 
     let cancelled = false;
     setView('loading');
 
-    const poll = async () => {
-      for (let i = 0; i < 10; i++) {
+    const verify = async () => {
+      // Retry a few times in case of brief Stripe API delays
+      for (let i = 0; i < 5; i++) {
         if (cancelled) return;
-        await new Promise((r) => setTimeout(r, 1500));
-        if (cancelled) return;
+        try {
+          const { data, error } = await supabase.functions.invoke('verify-payment', {
+            body: { sessionId: pendingSessionId, orgId: pendingOrgId },
+          });
 
-        const { data: org } = await supabase
-          .from('organisations')
-          .select('subscription_status')
-          .eq('id', pendingOrgId)
-          .single();
-
-        if (org?.subscription_status === 'active' || org?.subscription_status === 'trialing') {
-          awaitingBillingRef.current = false;
-          setPendingOrgId(null);
-          loadUserProfile(session.user);
-          return;
+          if (!error && (data?.status === 'active' || data?.status === 'trialing')) {
+            awaitingBillingRef.current = false;
+            setPendingOrgId(null);
+            setPendingSessionId(null);
+            loadUserProfile(session.user);
+            return;
+          }
+        } catch (_) {
+          // continue
         }
+        if (cancelled) return;
+        await new Promise((r) => setTimeout(r, 2000));
       }
-      // Webhook didn't fire in time — clear flag and reload profile
+      // All attempts exhausted — clear flag and reload (may show payment_required)
       awaitingBillingRef.current = false;
       setPendingOrgId(null);
+      setPendingSessionId(null);
       loadUserProfile(session.user);
     };
 
-    poll();
+    verify();
     return () => { cancelled = true; };
-  }, [pendingOrgId, session]);
+  }, [pendingOrgId, pendingSessionId, session]);
 
   // Check for existing session
   useEffect(() => {
