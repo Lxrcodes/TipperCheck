@@ -88,6 +88,7 @@ serve(async (req) => {
       success_url: `${Deno.env.get('APP_URL')}/?subscription=active`,
       cancel_url: `${Deno.env.get('APP_URL')}/?subscription=cancelled`,
       subscription_data: {
+        trial_period_days: 7,
         metadata: { org_id: orgId },
       },
     });
