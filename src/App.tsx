@@ -43,6 +43,7 @@ function AppContent() {
   const [verifyingPayment, setVerifyingPayment] = useState(false);
   const [pendingOrgId, setPendingOrgId] = useState<string | null>(null);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
   const awaitingBillingRef = useRef(false);
 
   const offline = useOffline();
@@ -312,6 +313,34 @@ function AppContent() {
     offline.refreshPendingCount();
   };
 
+  const handleOpenPortal = async () => {
+    if (!org) return;
+    setPortalLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-portal-session', {
+        body: { orgId: org.id },
+      });
+      if (!error && data?.url) window.location.href = data.url;
+    } catch (err) {
+      console.error('Failed to open portal:', err);
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  const isSubscriptionEnding =
+    org !== null &&
+    !org.is_demo &&
+    org.cancel_at_period_end === true &&
+    !!org.current_period_end &&
+    new Date(org.current_period_end) > new Date();
+
+  const subscriptionEndDate = isSubscriptionEnding && org?.current_period_end
+    ? new Date(org.current_period_end).toLocaleDateString('en-GB', {
+        day: 'numeric', month: 'long', year: 'numeric',
+      })
+    : null;
+
   // Check for public routes (no auth required)
   const isInviteRoute = location.pathname.startsWith('/invite/');
   const isLegalRoute = location.pathname === '/privacy' || location.pathname === '/terms';
@@ -423,22 +452,41 @@ function AppContent() {
   // Manager Dashboard
   if (view === 'manager' && authUser && org) {
     return (
-      <Dashboard
-        user={authUser}
-        org={org}
-        onLogout={handleLogout}
-        onSwitchToDriver={handleSwitchToDriver}
-        onOrgReload={async () => {
-          const { data: orgData } = await supabase
-            .from('organisations')
-            .select('*')
-            .eq('id', authUser.org_id)
-            .single();
-          if (orgData) {
-            setOrg(orgData);
-          }
-        }}
-      />
+      <>
+        {isSubscriptionEnding && subscriptionEndDate && (
+          <div className="bg-amber-500 text-white text-sm py-2 px-4 flex items-center justify-center gap-3">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>
+              Your subscription will end on <strong>{subscriptionEndDate}</strong>. After this date your team will lose access.
+            </span>
+            {authUser.is_billing_admin && (
+              <button
+                onClick={handleOpenPortal}
+                disabled={portalLoading}
+                className="underline font-bold hover:no-underline whitespace-nowrap disabled:opacity-70"
+              >
+                {portalLoading ? 'Loading...' : 'Reactivate'}
+              </button>
+            )}
+          </div>
+        )}
+        <Dashboard
+          user={authUser}
+          org={org}
+          onLogout={handleLogout}
+          onSwitchToDriver={handleSwitchToDriver}
+          onOrgReload={async () => {
+            const { data: orgData } = await supabase
+              .from('organisations')
+              .select('*')
+              .eq('id', authUser.org_id)
+              .single();
+            if (orgData) {
+              setOrg(orgData);
+            }
+          }}
+        />
+      </>
     );
   }
 
@@ -459,6 +507,24 @@ function AppContent() {
 
         {/* Wrapper with padding when banner is shown */}
         <div className={showBanner ? 'pt-10' : ''}>
+          {isSubscriptionEnding && subscriptionEndDate && (
+            <div className="bg-amber-500 text-white text-sm py-2 px-4 flex items-center justify-center gap-3">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>
+                Your subscription will end on <strong>{subscriptionEndDate}</strong>.
+              </span>
+              {authUser.is_billing_admin && (
+                <button
+                  onClick={handleOpenPortal}
+                  disabled={portalLoading}
+                  className="underline font-bold hover:no-underline whitespace-nowrap disabled:opacity-70"
+                >
+                  {portalLoading ? 'Loading...' : 'Reactivate'}
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Header for drivers with role switch */}
           {isManager(authUser) && (
             <div className="bg-slate-900 text-white px-4 py-2 flex items-center justify-between">
