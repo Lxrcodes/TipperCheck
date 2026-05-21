@@ -13,6 +13,7 @@ export function Login({ onSuccess }: LoginProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,9 +115,31 @@ export function Login({ onSuccess }: LoginProps) {
               </div>
             </div>
 
+          {mode === 'signup' && (
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="terms-agree"
+                checked={agreedToTerms}
+                onChange={(e) => setAgreedToTerms(e.target.checked)}
+                className="mt-1 w-4 h-4 rounded border-slate-600 bg-slate-800 text-orange-500 focus:ring-orange-500 focus:ring-offset-slate-900 cursor-pointer shrink-0"
+              />
+              <label htmlFor="terms-agree" className="text-sm text-slate-400 cursor-pointer">
+                I agree to the{' '}
+                <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300">
+                  Terms and Conditions
+                </a>{' '}
+                and{' '}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300">
+                  Privacy Policy
+                </a>
+              </label>
+            </div>
+          )}
+
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || (mode === 'signup' && !agreedToTerms)}
             className="w-full flex items-center justify-center gap-2 py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-target"
           >
             {isLoading && <Loader2 className="w-5 h-5 animate-spin" />}
@@ -128,7 +151,7 @@ export function Login({ onSuccess }: LoginProps) {
           {mode === 'login' ? (
             <p className="text-slate-500 text-sm">
               Don't have an account?{' '}
-              <button onClick={() => { setMode('signup'); setError(null); }} className="text-orange-400 hover:text-orange-300">
+              <button onClick={() => { setMode('signup'); setError(null); setAgreedToTerms(false); }} className="text-orange-400 hover:text-orange-300">
                 Sign up
               </button>
             </p>

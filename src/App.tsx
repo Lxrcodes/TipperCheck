@@ -5,6 +5,8 @@ import { ToastProvider, useToast } from '@/components/shared/Toast';
 import { OfflineBanner } from '@/components/shared/OfflineBanner';
 import { Login } from '@/components/auth/Login';
 import { AcceptInvite } from '@/components/auth/AcceptInvite';
+import { PrivacyPage } from '@/components/legal/PrivacyPage';
+import { TermsPage } from '@/components/legal/TermsPage';
 import { Onboarding } from '@/components/onboarding/Onboarding';
 import { Dashboard } from '@/components/manager/Dashboard';
 import { CheckWizard } from '@/components/driver/CheckWizard';
@@ -259,17 +261,20 @@ function AppContent() {
 
   // Check for public routes (no auth required)
   const isInviteRoute = location.pathname.startsWith('/invite/');
+  const isLegalRoute = location.pathname === '/privacy' || location.pathname === '/terms';
 
   // Show configuration warning if Supabase not set up
   if (!isSupabaseConfigured()) {
     return <ConfigurationWarning />;
   }
 
-  // Handle invite route (public, no auth required)
-  if (isInviteRoute) {
+  // Handle public routes (no auth required)
+  if (isInviteRoute || isLegalRoute) {
     return (
       <Routes>
         <Route path="/invite/:token" element={<AcceptInvite />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
       </Routes>
     );
   }
