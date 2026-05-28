@@ -222,14 +222,16 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
       template = templates[0];
     }
 
-    // Normalize adblue to fuel_level (handles old database templates)
+    // Normalize fuel/adblue items to fuel_level selector (handles old database templates)
     if (template) {
       template = {
         ...template,
         categories: template.categories.map((c) => ({
           ...c,
           items: c.items.map((i) =>
-            i.id === 'adblue_level' ? { ...i, input_type: 'fuel_level' as const } : i
+            i.id === 'fuel_level' || i.id === 'adblue_level'
+              ? { ...i, input_type: 'fuel_level' as const }
+              : i
           ),
         })),
       };
