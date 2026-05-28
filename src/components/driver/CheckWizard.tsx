@@ -893,6 +893,12 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
                 <Truck className="w-5 h-5" />
                 {defectResolvedToday ? 'Start Re-check' : 'Check Again'}
               </button>
+              <button
+                onClick={() => setStep('select_vehicle')}
+                className="w-full py-3 bg-slate-800 text-slate-400 font-medium rounded-lg hover:bg-slate-700 transition-colors"
+              >
+                Change Vehicle
+              </button>
             </div>
           </div>
         </div>
