@@ -123,6 +123,7 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
   const fileInputRef = useRef<HTMLInputElement>(null);
   const regPhotoInputRef = useRef<HTMLInputElement>(null);
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
+  const autoRestoredRef = useRef(false);
 
   // Load cached data
   useEffect(() => {
@@ -192,6 +193,23 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
 
     return () => clearInterval(interval);
   }, [startedAt]);
+
+  // Restore today's check after view switches (driver ↔ manager)
+  useEffect(() => {
+    if (autoRestoredRef.current || loading || vehicles.length === 0) return;
+    const stored = sessionStorage.getItem('checkatruck_last_check');
+    if (!stored) return;
+    try {
+      const { vehicleId, checkDate } = JSON.parse(stored);
+      const today = new Date().toISOString().split('T')[0];
+      if (checkDate !== today) { sessionStorage.removeItem('checkatruck_last_check'); return; }
+      const vehicle = vehicles.find((v) => v.id === vehicleId);
+      if (vehicle) {
+        autoRestoredRef.current = true;
+        handleSelectVehicle(vehicle);
+      }
+    } catch { sessionStorage.removeItem('checkatruck_last_check'); }
+  }, [vehicles, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Format elapsed time as MM:SS
   const formatTime = (seconds: number) => {
@@ -274,6 +292,7 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
           defectRepairNotes: dbCheck.defect_repair_notes ?? '',
           headOfficeNotes: dbCheck.head_office_notes ?? '',
         };
+        sessionStorage.setItem('checkatruck_last_check', JSON.stringify({ vehicleId: vehicle.id, checkDate: today }));
         setLastCompletedCheck(summary);
         setDefectResolvedToday(defectCleared);
         setCheckingForToday(false);
@@ -304,6 +323,7 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
           defectRepairNotes: pendingToday.defect_repair_notes ?? '',
           headOfficeNotes: pendingToday.head_office_notes ?? '',
         };
+        sessionStorage.setItem('checkatruck_last_check', JSON.stringify({ vehicleId: vehicle.id, checkDate: today }));
         setLastCompletedCheck(summary);
         setDefectResolvedToday(false); // Pending checks can't have resolved defects yet
         setCheckingForToday(false);
@@ -690,6 +710,8 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
   };
 
   const handleStartNewCheck = () => {
+    sessionStorage.removeItem('checkatruck_last_check');
+    autoRestoredRef.current = false;
     setStep('select_vehicle');
     setSelectedVehicle(null);
     setSelectedTemplate(null);
@@ -1496,10 +1518,9 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
         {/* Header */}
         <div className="bg-slate-800 px-4 py-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Truck className="w-5 h-5 text-orange-500" />
-              <span className="text-white font-bold">CheckaTruck</span>
-            </div>
+            <button onClick={() => setStep('today_check')} className="text-slate-400 hover:text-white">
+              <ChevronLeft className="w-5 h-5" />
+            </button>
             <span className="font-mono font-bold text-white">{check.vehicleReg}</span>
           </div>
         </div>
