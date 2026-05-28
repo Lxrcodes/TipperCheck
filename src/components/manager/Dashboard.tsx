@@ -1216,6 +1216,41 @@ function TeamView({ users, currentUserId, onAdd, onEdit }: TeamViewProps) {
 }
 
 // ============================================================================
+// StorageImage Component
+// Tries the stored URL first; on 403/error generates a signed URL via the
+// authenticated Supabase session so it works regardless of bucket visibility.
+// ============================================================================
+
+function StorageImage({ url, alt, className }: { url: string; alt: string; className?: string }) {
+  const [src, setSrc] = useState(url);
+  const [gone, setGone] = useState(false);
+
+  const handleError = async () => {
+    // Extract the path inside the bucket from the public URL
+    // e.g. https://xxx.supabase.co/storage/v1/object/public/check-photos/reg-photos/abc.jpg
+    //      → reg-photos/abc.jpg
+    const match = src.match(/\/storage\/v1\/object\/(?:public|sign)\/check-photos\/(.+?)(?:\?|$)/);
+    if (!match) { setGone(true); return; }
+
+    try {
+      const { data } = await supabase.storage
+        .from('check-photos')
+        .createSignedUrl(match[1], 3600);
+      if (data?.signedUrl) {
+        setSrc(data.signedUrl);
+      } else {
+        setGone(true);
+      }
+    } catch {
+      setGone(true);
+    }
+  };
+
+  if (gone) return null;
+  return <img src={src} alt={alt} className={className} onError={handleError} />;
+}
+
+// ============================================================================
 // HistoryView Component
 // ============================================================================
 
@@ -1562,8 +1597,8 @@ function HistoryView({ orgId, vehicles }: HistoryViewProps) {
                       {check.reg_photo_url && (
                         <div>
                           <div className="text-xs font-bold text-slate-500 uppercase mb-2">Registration Plate Photo</div>
-                          <img
-                            src={check.reg_photo_url}
+                          <StorageImage
+                            url={check.reg_photo_url}
                             alt="Registration plate"
                             className="w-full max-w-xs rounded-lg border border-slate-200"
                           />
@@ -1625,7 +1660,7 @@ function HistoryView({ orgId, vehicles }: HistoryViewProps) {
                                   {r.photo_urls && r.photo_urls.length > 0 && (
                                     <div className="flex gap-2 mt-1 flex-wrap">
                                       {r.photo_urls.map((url: string, i: number) => (
-                                        <img key={i} src={url} alt={`Defect photo ${i + 1}`} className="w-16 h-16 object-cover rounded border border-slate-200" />
+                                        <StorageImage key={i} url={url} alt={`Defect photo ${i + 1}`} className="w-16 h-16 object-cover rounded border border-slate-200" />
                                       ))}
                                     </div>
                                   )}
@@ -1674,7 +1709,7 @@ function HistoryView({ orgId, vehicles }: HistoryViewProps) {
                                 {defect.photo_urls && defect.photo_urls.length > 0 && (
                                   <div className="flex gap-2 mb-1 flex-wrap">
                                     {defect.photo_urls.map((url, i) => (
-                                      <img key={i} src={url} alt={`Defect ${i + 1}`} className="w-14 h-14 object-cover rounded border border-slate-200" />
+                                      <StorageImage key={i} url={url} alt={`Defect ${i + 1}`} className="w-14 h-14 object-cover rounded border border-slate-200" />
                                     ))}
                                   </div>
                                 )}
