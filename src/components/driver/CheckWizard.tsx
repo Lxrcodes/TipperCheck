@@ -26,6 +26,7 @@ import {
   getCachedTemplates,
   getCachedVehicles,
   cacheTemplates,
+  getPendingChecks,
 } from '@/services/offlineDb';
 import { supabase } from '@/services/supabaseClient';
 import type {
@@ -35,6 +36,7 @@ import type {
   CheckItemResult,
   CheckResult,
   CheckStatus,
+  CheckRun,
   PendingCheck,
   GpsCoordinates,
   FuelLevel,
@@ -47,6 +49,7 @@ import { FUEL_LEVELS } from '@/types';
 
 type WizardStep =
   | 'select_vehicle'
+  | 'today_check'
   | 'intro'
   | 'reg_photo'
   | 'category'
@@ -114,6 +117,8 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
   const [driverFitConfirmed, setDriverFitConfirmed] = useState(false);
 
   const [lastCompletedCheck, setLastCompletedCheck] = useState<CompletedCheckSummary | null>(null);
+  const [defectResolvedToday, setDefectResolvedToday] = useState(false);
+  const [checkingForToday, setCheckingForToday] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const regPhotoInputRef = useRef<HTMLInputElement>(null);
@@ -199,28 +204,16 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
   // Handlers
   // ============================================================================
 
-  const handleSelectVehicle = (vehicle: Vehicle) => {
+  const handleSelectVehicle = async (vehicle: Vehicle) => {
     setSelectedVehicle(vehicle);
-
-    // Debug logging
-    console.log('Templates available:', templates);
-    console.log('Vehicle type:', vehicle.vehicle_type);
+    setCheckingForToday(true);
 
     // Find appropriate template for vehicle type
     let template = templates.find((t) => {
-      console.log('Checking template:', t.name, 'vehicle_types:', t.vehicle_types);
-      // Handle both array and string formats from database
-      const vehicleTypes = Array.isArray(t.vehicle_types)
-        ? t.vehicle_types
-        : [];
+      const vehicleTypes = Array.isArray(t.vehicle_types) ? t.vehicle_types : [];
       return vehicleTypes.includes(vehicle.vehicle_type);
     });
-
-    // Fallback to first template if no match
-    if (!template && templates.length > 0) {
-      console.log('No matching template, using first available');
-      template = templates[0];
-    }
+    if (!template && templates.length > 0) template = templates[0];
 
     // Normalize fuel/adblue items to fuel_level selector (handles old database templates)
     if (template) {
@@ -236,9 +229,92 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
         })),
       };
     }
-
-    console.log('Selected template:', template);
     setSelectedTemplate(template ?? null);
+
+    const today = new Date().toISOString().split('T')[0];
+
+    try {
+      // 1. Check Supabase for today's synced check
+      const { data: dbCheck } = await supabase
+        .from('check_runs')
+        .select('*')
+        .eq('vehicle_id', vehicle.id)
+        .eq('user_id', driverId)
+        .eq('check_date', today)
+        .order('completed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle() as { data: CheckRun | null };
+
+      if (dbCheck && template) {
+        // Check if any defect from this check has been resolved (requires re-check)
+        let defectCleared = false;
+        if (dbCheck.overall_status !== 'pass') {
+          const { data: resolved } = await supabase
+            .from('defects')
+            .select('id')
+            .eq('check_run_id', dbCheck.id)
+            .eq('status', 'resolved')
+            .limit(1);
+          defectCleared = !!(resolved && resolved.length > 0);
+        }
+
+        const summary: CompletedCheckSummary = {
+          vehicleReg: dbCheck.vehicle_registration,
+          vehicleType: dbCheck.vehicle_type,
+          driverName: dbCheck.driver_name,
+          startedAt: new Date(dbCheck.started_at),
+          completedAt: new Date(dbCheck.completed_at),
+          overallStatus: dbCheck.overall_status,
+          results: new Map(dbCheck.results.map((r) => [r.item_id, r])),
+          template,
+          regPhoto: dbCheck.reg_photo_url ?? null,
+          signature: dbCheck.signature_url,
+          vehicleFitConfirmed: dbCheck.vehicle_fit_confirmed,
+          driverFitConfirmed: dbCheck.driver_fit_confirmed,
+          defectRepairNotes: dbCheck.defect_repair_notes ?? '',
+          headOfficeNotes: dbCheck.head_office_notes ?? '',
+        };
+        setLastCompletedCheck(summary);
+        setDefectResolvedToday(defectCleared);
+        setCheckingForToday(false);
+        setStep('today_check');
+        return;
+      }
+
+      // 2. Fall back to IndexedDB (check not yet synced)
+      const pending = await getPendingChecks();
+      const pendingToday = pending.find(
+        (p) => p.vehicle_id === vehicle.id && p.user_id === driverId && p.check_date === today
+      );
+
+      if (pendingToday && template) {
+        const summary: CompletedCheckSummary = {
+          vehicleReg: pendingToday.vehicle_registration,
+          vehicleType: pendingToday.vehicle_type,
+          driverName: pendingToday.driver_name,
+          startedAt: new Date(pendingToday.started_at),
+          completedAt: new Date(pendingToday.completed_at),
+          overallStatus: pendingToday.overall_status,
+          results: new Map(pendingToday.results.map((r) => [r.item_id, r])),
+          template,
+          regPhoto: pendingToday.reg_photo_data_url ?? null,
+          signature: pendingToday.signature_data_url ?? null,
+          vehicleFitConfirmed: pendingToday.vehicle_fit_confirmed,
+          driverFitConfirmed: pendingToday.driver_fit_confirmed,
+          defectRepairNotes: pendingToday.defect_repair_notes ?? '',
+          headOfficeNotes: pendingToday.head_office_notes ?? '',
+        };
+        setLastCompletedCheck(summary);
+        setDefectResolvedToday(false); // Pending checks can't have resolved defects yet
+        setCheckingForToday(false);
+        setStep('today_check');
+        return;
+      }
+    } catch (err) {
+      console.error('Failed to check for today\'s check:', err);
+    }
+
+    setCheckingForToday(false);
     setStep('intro');
   };
 
@@ -630,6 +706,8 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
     setSubmittedDriverName('');
     setElapsedSeconds(0);
     setError(null);
+    setDefectResolvedToday(false);
+    setLastCompletedCheck(null);
   };
 
   // ============================================================================
@@ -690,18 +768,134 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
               <button
                 key={vehicle.id}
                 onClick={() => handleSelectVehicle(vehicle)}
-                className="w-full bg-slate-800 rounded-lg p-4 text-left hover:bg-slate-700 transition-colors touch-target-lg"
+                disabled={checkingForToday}
+                className="w-full bg-slate-800 rounded-lg p-4 text-left hover:bg-slate-700 transition-colors touch-target-lg disabled:opacity-60"
               >
-                <div className="text-lg font-mono font-bold text-white">
-                  {vehicle.registration}
-                </div>
-                <div className="text-sm text-slate-400">
-                  {vehicle.make} {vehicle.model} • {vehicle.vehicle_type.replace(/_/g, ' ')}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-lg font-mono font-bold text-white">
+                      {vehicle.registration}
+                    </div>
+                    <div className="text-sm text-slate-400">
+                      {vehicle.make} {vehicle.model} • {vehicle.vehicle_type.replace(/_/g, ' ')}
+                    </div>
+                  </div>
+                  {checkingForToday && (
+                    <Loader2 className="w-5 h-5 text-orange-500 animate-spin flex-shrink-0" />
+                  )}
                 </div>
               </button>
             ))}
           </div>
         )}
+      </div>
+    );
+  }
+
+  // Already checked today gate
+  if (step === 'today_check' && lastCompletedCheck) {
+    const check = lastCompletedCheck;
+    const defectCount = Array.from(check.results.values()).filter((r) => r.status === 'fail').length;
+
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col">
+        <div className="bg-slate-800 px-4 py-3">
+          <div className="flex items-center justify-between">
+            <button onClick={() => setStep('select_vehicle')} className="text-slate-400 hover:text-white">
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <span className="font-mono font-bold text-white">{check.vehicleReg}</span>
+            <div className="w-5" />
+          </div>
+        </div>
+
+        <div className="flex-1 p-4 flex flex-col justify-center">
+          <div className="w-full max-w-md mx-auto space-y-4">
+            {/* Status banner */}
+            {defectResolvedToday ? (
+              <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-5 text-center">
+                <AlertTriangle className="w-10 h-10 text-amber-400 mx-auto mb-3" />
+                <h2 className="text-amber-400 font-bold text-lg mb-1">Re-check Required</h2>
+                <p className="text-slate-400 text-sm">
+                  A defect from your earlier check has been cleared by the workshop. You must complete a new walk-around before driving.
+                </p>
+              </div>
+            ) : (
+              <div className={`rounded-xl p-5 text-center ${
+                check.overallStatus === 'pass'
+                  ? 'bg-green-500/10 border border-green-500/40'
+                  : check.overallStatus === 'defects'
+                  ? 'bg-amber-500/10 border border-amber-500/40'
+                  : 'bg-red-500/10 border border-red-500/40'
+              }`}>
+                {check.overallStatus === 'pass'
+                  ? <CheckCircle2 className="w-10 h-10 text-green-400 mx-auto mb-3" />
+                  : check.overallStatus === 'defects'
+                  ? <AlertTriangle className="w-10 h-10 text-amber-400 mx-auto mb-3" />
+                  : <XCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />}
+                <h2 className={`font-bold text-lg mb-1 ${
+                  check.overallStatus === 'pass' ? 'text-green-400' :
+                  check.overallStatus === 'defects' ? 'text-amber-400' : 'text-red-400'
+                }`}>
+                  {check.overallStatus === 'pass' ? 'Passed' :
+                   check.overallStatus === 'defects' ? `${defectCount} Defect${defectCount !== 1 ? 's' : ''} Found` :
+                   'Do Not Drive'}
+                </h2>
+                <p className="text-slate-400 text-sm">
+                  This vehicle was checked today at {check.completedAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            )}
+
+            {/* Check details */}
+            <div className="bg-slate-800 rounded-lg p-4 text-sm space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Vehicle</span>
+                <span className="text-white font-mono font-bold">{check.vehicleReg}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Driver</span>
+                <span className="text-white">{check.driverName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Checked at</span>
+                <span className="text-white">
+                  {check.completedAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Date</span>
+                <span className="text-white">
+                  {check.completedAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-3">
+              {!defectResolvedToday && (
+                <button
+                  onClick={() => setStep('receipt')}
+                  className="w-full py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 className="w-5 h-5" />
+                  View Today's Check
+                </button>
+              )}
+              <button
+                onClick={() => setStep('intro')}
+                className={`w-full py-3 font-bold rounded-lg transition-colors flex items-center justify-center gap-2 ${
+                  defectResolvedToday
+                    ? 'bg-orange-500 text-white hover:bg-orange-600'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                <Truck className="w-5 h-5" />
+                {defectResolvedToday ? 'Start Re-check' : 'Check Again'}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
