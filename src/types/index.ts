@@ -147,6 +147,7 @@ export interface CheckRun {
   driver_fit_confirmed: boolean;
   // Attachments
   signature_url: string | null;
+  reg_photo_url?: string | null;
   pdf_url: string | null;
   // Sync tracking
   offline_created_at: string | null;
@@ -589,7 +590,7 @@ export const DEFAULT_CHECK_TEMPLATE: Omit<CheckTemplate, 'id' | 'created_at'> = 
       name: 'Fluid Levels',
       items: [
         { id: 'fuel_level', label: 'Fuel Level', input_type: 'fuel_level', is_critical: false, photo_required: false },
-        { id: 'adblue_level', label: 'Ad-Blue Level', input_type: 'pass_fail_na', is_critical: false, photo_required: false },
+        { id: 'adblue_level', label: 'Ad-Blue Level', input_type: 'fuel_level', is_critical: false, photo_required: false },
         { id: 'oil_coolant', label: 'Oil/Coolant Level', input_type: 'pass_fail', is_critical: false, photo_required: false },
         { id: 'screenwash', label: 'Screenwash Level', input_type: 'pass_fail', is_critical: false, photo_required: false },
       ],

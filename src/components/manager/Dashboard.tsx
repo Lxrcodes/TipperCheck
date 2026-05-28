@@ -43,9 +43,11 @@ import type {
 import {
   VEHICLE_TYPES,
   VEHICLE_STATUSES,
+  FUEL_LEVELS,
   getVehicleStatusColor,
   getVehicleStatusLabel,
   getSeverityColor,
+  getDefectStatusLabel,
   isDriver,
 } from '@/types';
 import { VehicleModal } from './VehicleModal';
@@ -1230,6 +1232,8 @@ function HistoryView({ orgId, vehicles }: HistoryViewProps) {
   const [driverFilter, setDriverFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('7');
   const [expandedCheckId, setExpandedCheckId] = useState<string | null>(null);
+  const [checkDefects, setCheckDefects] = useState<Record<string, Defect[]>>({});
+  const [loadingDefects, setLoadingDefects] = useState<Record<string, boolean>>({});
 
   // Load checks on mount and when filters change
   useEffect(() => {
@@ -1290,7 +1294,20 @@ function HistoryView({ orgId, vehicles }: HistoryViewProps) {
   });
 
   const toggleExpand = (checkId: string) => {
-    setExpandedCheckId(expandedCheckId === checkId ? null : checkId);
+    const isOpening = expandedCheckId !== checkId;
+    setExpandedCheckId(isOpening ? checkId : null);
+    if (isOpening && !checkDefects[checkId]) {
+      setLoadingDefects((prev) => ({ ...prev, [checkId]: true }));
+      supabase
+        .from('defects')
+        .select('*')
+        .eq('check_run_id', checkId)
+        .order('created_at', { ascending: true })
+        .then(({ data }) => {
+          setCheckDefects((prev) => ({ ...prev, [checkId]: data || [] }));
+          setLoadingDefects((prev) => ({ ...prev, [checkId]: false }));
+        });
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -1504,124 +1521,227 @@ function HistoryView({ orgId, vehicles }: HistoryViewProps) {
 
                 {/* Expanded Details */}
                 {isExpanded && (
-                  <div className="px-4 pb-4 border-t border-slate-100">
-                    <div className="pt-3 space-y-3">
-                      {/* Check Details */}
-                      <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="border-t border-slate-100">
+                    <div className="p-4 space-y-5">
+                      {/* Core info grid */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                         <div>
-                          <span className="text-slate-500">Vehicle</span>
-                          <div className="font-medium text-slate-900">
-                            {check.vehicle_registration}
-                          </div>
-                          <div className="text-xs text-slate-400">{check.vehicle_type}</div>
+                          <div className="text-xs text-slate-500 mb-0.5">Vehicle</div>
+                          <div className="font-mono font-bold text-slate-900">{check.vehicle_registration}</div>
+                          <div className="text-xs text-slate-400 capitalize">{check.vehicle_type?.replace(/_/g, ' ')}</div>
                         </div>
                         <div>
-                          <span className="text-slate-500">Driver</span>
+                          <div className="text-xs text-slate-500 mb-0.5">Driver</div>
                           <div className="font-medium text-slate-900">{check.driver_name}</div>
                           <div className="text-xs text-slate-400">{check.driver_email}</div>
                         </div>
                         <div>
-                          <span className="text-slate-500">Started</span>
-                          <div className="font-medium text-slate-900">
-                            {new Date(check.started_at).toLocaleTimeString('en-GB', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
+                          <div className="text-xs text-slate-500 mb-0.5">Duration</div>
+                          <div className="font-medium text-slate-900">{formatDuration(check.started_at, check.completed_at)}</div>
+                          <div className="text-xs text-slate-400">
+                            {new Date(check.started_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                            {' – '}
+                            {new Date(check.completed_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         </div>
-                        <div>
-                          <span className="text-slate-500">Completed</span>
-                          <div className="font-medium text-slate-900">
-                            {new Date(check.completed_at).toLocaleTimeString('en-GB', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
+                        {check.gps_start && (
+                          <div className="col-span-2 sm:col-span-3">
+                            <div className="text-xs text-slate-500 mb-0.5">Location</div>
+                            <div className="text-slate-700 text-sm">
+                              {check.location_address || `${check.gps_start.lat.toFixed(4)}, ${check.gps_start.lng.toFixed(4)}`}
+                            </div>
                           </div>
-                        </div>
+                        )}
                         <div>
-                          <span className="text-slate-500">Duration</span>
-                          <div className="font-medium text-slate-900">
-                            {formatDuration(check.started_at, check.completed_at)}
+                          <div className="text-xs text-slate-500 mb-0.5">Template</div>
+                          <div className="text-slate-700 text-sm">{check.template_name || 'Standard Check'} v{check.template_version}</div>
+                        </div>
+                      </div>
+
+                      {/* Reg photo */}
+                      {check.reg_photo_url && (
+                        <div>
+                          <div className="text-xs font-bold text-slate-500 uppercase mb-2">Registration Plate Photo</div>
+                          <img
+                            src={check.reg_photo_url}
+                            alt="Registration plate"
+                            className="w-full max-w-xs rounded-lg border border-slate-200"
+                          />
+                        </div>
+                      )}
+
+                      {/* Confirmations */}
+                      <div>
+                        <div className="text-xs font-bold text-slate-500 uppercase mb-2">Declarations</div>
+                        <div className="flex gap-4 text-sm">
+                          <div className="flex items-center gap-1.5">
+                            {check.vehicle_fit_confirmed
+                              ? <CheckCircle2 className="w-4 h-4 text-green-500" />
+                              : <XCircle className="w-4 h-4 text-red-500" />}
+                            <span className="text-slate-600">Vehicle Fit</span>
                           </div>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Template</span>
-                          <div className="font-medium text-slate-900">
-                            {check.template_name || 'Standard Check'}
+                          <div className="flex items-center gap-1.5">
+                            {check.driver_fit_confirmed
+                              ? <CheckCircle2 className="w-4 h-4 text-green-500" />
+                              : <XCircle className="w-4 h-4 text-red-500" />}
+                            <span className="text-slate-600">Driver Fit</span>
                           </div>
                         </div>
                       </div>
 
-                      {/* Location */}
-                      {check.gps_start && (
-                        <div className="text-sm">
-                          <span className="text-slate-500">Location</span>
-                          <div className="text-slate-700">
-                            {check.location_address ||
-                              `${check.gps_start.lat.toFixed(4)}, ${check.gps_start.lng.toFixed(4)}`}
-                          </div>
+                      {/* Notes */}
+                      {(check.defect_repair_notes || check.head_office_notes) && (
+                        <div className="space-y-2">
+                          <div className="text-xs font-bold text-slate-500 uppercase">Notes</div>
+                          {check.defect_repair_notes && (
+                            <div className="text-sm">
+                              <div className="text-xs text-slate-500 mb-1">Repair Notes</div>
+                              <p className="text-slate-700 bg-slate-50 p-2 rounded">{check.defect_repair_notes}</p>
+                            </div>
+                          )}
+                          {check.head_office_notes && (
+                            <div className="text-sm">
+                              <div className="text-xs text-slate-500 mb-1">Head Office Notes</div>
+                              <p className="text-slate-700 bg-slate-50 p-2 rounded">{check.head_office_notes}</p>
+                            </div>
+                          )}
                         </div>
                       )}
 
-                      {/* Results Summary */}
+                      {/* Check items with defect detail */}
+                      {check.results && check.results.length > 0 && (() => {
+                        const failedResults = check.results.filter((r: { status: string }) => r.status === 'fail');
+                        if (failedResults.length === 0) return null;
+                        return (
+                          <div>
+                            <div className="text-xs font-bold text-slate-500 uppercase mb-2">
+                              Defects at Time of Check ({failedResults.length})
+                            </div>
+                            <div className="space-y-2">
+                              {failedResults.map((r: { item_id: string; note?: string | null; photo_urls?: string[] }) => (
+                                <div key={r.item_id} className="border-l-2 border-red-400 pl-3 py-1">
+                                  <div className="text-sm font-medium text-slate-900">{r.item_id.replace(/_/g, ' ')}</div>
+                                  {r.note && <p className="text-xs text-slate-500 mt-0.5">{r.note}</p>}
+                                  {r.photo_urls && r.photo_urls.length > 0 && (
+                                    <div className="flex gap-2 mt-1 flex-wrap">
+                                      {r.photo_urls.map((url: string, i: number) => (
+                                        <img key={i} src={url} alt={`Defect photo ${i + 1}`} className="w-16 h-16 object-cover rounded border border-slate-200" />
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Defect workflow history */}
+                      {loadingDefects[check.id] ? (
+                        <div className="flex items-center gap-2 text-sm text-slate-400">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Loading defect history...
+                        </div>
+                      ) : checkDefects[check.id] && checkDefects[check.id].length > 0 ? (
+                        <div>
+                          <div className="text-xs font-bold text-slate-500 uppercase mb-2">Defect Workflow History</div>
+                          <div className="space-y-3">
+                            {checkDefects[check.id].map((defect) => (
+                              <div key={defect.id} className="bg-slate-50 rounded-lg p-3 text-sm">
+                                <div className="flex items-start justify-between gap-2 mb-1">
+                                  <div>
+                                    <span className="font-medium text-slate-900">{defect.item_label}</span>
+                                    <span className="text-xs text-slate-500 ml-2">{defect.category}</span>
+                                  </div>
+                                  <div className="flex gap-1.5 flex-shrink-0">
+                                    <span className={`text-xs px-2 py-0.5 rounded font-bold ${getSeverityColor(defect.severity)}`}>
+                                      {defect.severity}
+                                    </span>
+                                    <span className={`text-xs px-2 py-0.5 rounded font-bold ${
+                                      defect.status === 'resolved'
+                                        ? 'bg-green-100 text-green-700'
+                                        : defect.status === 'assigned'
+                                        ? 'bg-blue-100 text-blue-700'
+                                        : 'bg-amber-100 text-amber-700'
+                                    }`}>
+                                      {getDefectStatusLabel(defect.status)}
+                                    </span>
+                                  </div>
+                                </div>
+                                {defect.driver_notes && (
+                                  <p className="text-xs text-slate-500 mb-1">Driver: {defect.driver_notes}</p>
+                                )}
+                                {defect.photo_urls && defect.photo_urls.length > 0 && (
+                                  <div className="flex gap-2 mb-1 flex-wrap">
+                                    {defect.photo_urls.map((url, i) => (
+                                      <img key={i} src={url} alt={`Defect ${i + 1}`} className="w-14 h-14 object-cover rounded border border-slate-200" />
+                                    ))}
+                                  </div>
+                                )}
+                                {defect.status === 'resolved' && defect.resolved_at && (
+                                  <div className="mt-2 pt-2 border-t border-slate-200">
+                                    <div className="text-xs font-medium text-green-700 mb-0.5">
+                                      Resolved {new Date(defect.resolved_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                      {defect.resolved_by && ` by ${defect.resolved_by}`}
+                                    </div>
+                                    {defect.resolution_notes && (
+                                      <p className="text-xs text-slate-600">{defect.resolution_notes}</p>
+                                    )}
+                                  </div>
+                                )}
+                                {defect.assigned_to && defect.status !== 'resolved' && (
+                                  <div className="text-xs text-blue-600 mt-1">Assigned to {defect.assigned_to}</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : checkDefects[check.id] && check.overall_status !== 'pass' ? (
+                        <div className="text-xs text-slate-400">No defect records found for this check.</div>
+                      ) : null}
+
+                      {/* Results summary */}
                       {check.results && check.results.length > 0 && (
-                        <div className="text-sm">
-                          <span className="text-slate-500">Results Summary</span>
-                          <div className="flex gap-3 mt-1">
-                            <span className="text-green-600">
+                        <div>
+                          <div className="text-xs font-bold text-slate-500 uppercase mb-2">Results Summary</div>
+                          <div className="flex gap-4 text-sm">
+                            <span className="text-green-600 font-medium">
                               {check.results.filter((r: { status: string }) => r.status === 'pass').length} Pass
                             </span>
-                            <span className="text-red-600">
+                            <span className="text-red-600 font-medium">
                               {check.results.filter((r: { status: string }) => r.status === 'fail').length} Fail
                             </span>
                             <span className="text-slate-400">
                               {check.results.filter((r: { status: string }) => r.status === 'na').length} N/A
                             </span>
                           </div>
+                          {/* Per-item detail */}
+                          {check.results
+                            .filter((r: { status: string }) => r.status !== 'fail')
+                            .slice(0, 5).length > 0 && (
+                            <details className="mt-2">
+                              <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-600">
+                                Show all {check.results.length} items
+                              </summary>
+                              <div className="mt-2 space-y-1">
+                                {check.results.map((r: { item_id: string; status: string; fuel_level?: string }) => (
+                                  <div key={r.item_id} className="flex items-center justify-between text-xs py-0.5">
+                                    <span className="text-slate-600">{r.item_id.replace(/_/g, ' ')}</span>
+                                    <span className={`font-medium ${
+                                      r.status === 'pass' ? 'text-green-600' :
+                                      r.status === 'fail' ? 'text-red-600' : 'text-slate-400'
+                                    }`}>
+                                      {r.status === 'pass'
+                                        ? (r.fuel_level ? FUEL_LEVELS.find(f => f.value === r.fuel_level)?.label : 'OK')
+                                        : r.status === 'fail' ? 'DEFECT' : 'N/A'}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          )}
                         </div>
                       )}
-
-                      {/* Notes */}
-                      {(check.defect_repair_notes || check.head_office_notes) && (
-                        <div className="space-y-2">
-                          {check.defect_repair_notes && (
-                            <div className="text-sm">
-                              <span className="text-slate-500">Repair Notes</span>
-                              <p className="text-slate-700 bg-slate-50 p-2 rounded mt-1">
-                                {check.defect_repair_notes}
-                              </p>
-                            </div>
-                          )}
-                          {check.head_office_notes && (
-                            <div className="text-sm">
-                              <span className="text-slate-500">Head Office Notes</span>
-                              <p className="text-slate-700 bg-slate-50 p-2 rounded mt-1">
-                                {check.head_office_notes}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Confirmations */}
-                      <div className="flex gap-4 text-sm">
-                        <div className="flex items-center gap-1">
-                          {check.vehicle_fit_confirmed ? (
-                            <CheckCircle2 className="w-4 h-4 text-green-500" />
-                          ) : (
-                            <XCircle className="w-4 h-4 text-red-500" />
-                          )}
-                          <span className="text-slate-600">Vehicle Fit</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {check.driver_fit_confirmed ? (
-                            <CheckCircle2 className="w-4 h-4 text-green-500" />
-                          ) : (
-                            <XCircle className="w-4 h-4 text-red-500" />
-                          )}
-                          <span className="text-slate-600">Driver Fit</span>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 )}
