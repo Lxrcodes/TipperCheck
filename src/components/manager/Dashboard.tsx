@@ -184,6 +184,9 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
             <Truck className="w-5 h-5 text-white" />
           </div>
           <span className="font-bold">{org.name}</span>
+          {org.is_demo && (
+            <span className="text-xs font-semibold bg-amber-400 text-amber-900 px-2 py-0.5 rounded-full">Demo</span>
+          )}
         </div>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -218,7 +221,12 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-white font-bold truncate">{org.name}</div>
-              <div className="text-xs text-slate-400 truncate">{user.name}</div>
+              <div className="flex items-center gap-2">
+                <div className="text-xs text-slate-400 truncate">{user.name}</div>
+                {org.is_demo && (
+                  <span className="text-xs font-semibold bg-amber-400 text-amber-900 px-2 py-0.5 rounded-full shrink-0">Demo</span>
+                )}
+              </div>
             </div>
             {/* Close button for mobile */}
             <button
