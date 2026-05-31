@@ -1906,6 +1906,7 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
   const [billingLoading, setBillingLoading] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const [reactivateLoading, setReactivateLoading] = useState(false);
 
   // Password change state
@@ -2027,10 +2028,10 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
     setDeleteError(null);
 
     try {
-      // Cancel subscription if active
-      if (org.subscription_id && org.subscription_status === 'active' && !org.cancel_at_period_end) {
-        const { cancelSubscription } = await import('@/services/stripeClient');
-        await cancelSubscription(org.id);
+      // Immediately cancel any active or trialing subscription so they aren't charged after leaving
+      if (org.subscription_id) {
+        const { cancelSubscriptionImmediately } = await import('@/services/stripeClient');
+        await cancelSubscriptionImmediately(org.id);
       }
 
       // Deactivate all users in the organisation
@@ -2065,15 +2066,19 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
 
   const handleCancelSubscription = async () => {
     setCancelLoading(true);
+    setCancelError(null);
     try {
       const { cancelSubscription } = await import('@/services/stripeClient');
       const result = await cancelSubscription(org.id);
       if (result?.success) {
         setShowCancelModal(false);
         await onOrgReload();
+      } else {
+        setCancelError('Cancellation failed. Please try using the Manage Billing button to cancel via the Stripe portal instead.');
       }
     } catch (err) {
       console.error('Failed to cancel subscription:', err);
+      setCancelError('Something went wrong. Please use the Manage Billing button to cancel via the Stripe portal.');
     } finally {
       setCancelLoading(false);
     }
@@ -2326,7 +2331,7 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
           {org.subscription_id && org.subscription_status === 'active' && !org.cancel_at_period_end && (
             <div className="mt-4 text-center">
               <button
-                onClick={() => setShowCancelModal(true)}
+                onClick={() => { setCancelError(null); setShowCancelModal(true); }}
                 className="text-sm text-red-600 hover:text-red-700 hover:underline"
               >
                 Cancel subscription
@@ -2434,9 +2439,14 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
                 You can reactivate your subscription at any time before it ends.
               </p>
             </div>
+            {cancelError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                {cancelError}
+              </div>
+            )}
             <div className="flex gap-3">
               <button
-                onClick={() => setShowCancelModal(false)}
+                onClick={() => { setShowCancelModal(false); setCancelError(null); }}
                 disabled={cancelLoading}
                 className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors"
               >

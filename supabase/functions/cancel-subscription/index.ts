@@ -18,7 +18,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -33,14 +32,13 @@ serve(async (req) => {
       );
     }
 
-    if (action !== 'cancel' && action !== 'reactivate') {
+    if (!['cancel', 'reactivate', 'cancel_immediately'].includes(action)) {
       return new Response(
-        JSON.stringify({ error: 'Invalid action. Must be "cancel" or "reactivate"' }),
+        JSON.stringify({ error: 'Invalid action' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Get org details
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const { data: org, error: orgError } = await supabase
       .from('organisations')
@@ -55,13 +53,26 @@ serve(async (req) => {
       );
     }
 
-    // Update subscription in Stripe
+    // Immediate cancellation — used when deleting an account
+    if (action === 'cancel_immediately') {
+      await stripe.subscriptions.cancel(org.subscription_id);
+      await supabase
+        .from('organisations')
+        .update({ subscription_status: 'canceled', subscription_id: null })
+        .eq('id', orgId);
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Schedule cancellation at period end / reactivate
     const cancelAtPeriodEnd = action === 'cancel';
     const subscription = await stripe.subscriptions.update(org.subscription_id, {
       cancel_at_period_end: cancelAtPeriodEnd,
     });
 
-    // Update database with cancellation status
     await supabase
       .from('organisations')
       .update({

@@ -121,6 +121,27 @@ interface CancelSubscriptionResponse {
 }
 
 /**
+ * Immediately cancel a subscription — used when deleting an account
+ */
+export async function cancelSubscriptionImmediately(orgId: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.functions.invoke<{ success: boolean }>('cancel-subscription', {
+      body: { orgId, action: 'cancel_immediately' },
+    });
+
+    if (error) {
+      console.error('Immediate cancel error:', error);
+      return false;
+    }
+
+    return data?.success ?? false;
+  } catch (err) {
+    console.error('Failed to immediately cancel subscription:', err);
+    return false;
+  }
+}
+
+/**
  * Cancel subscription at end of billing period
  */
 export async function cancelSubscription(orgId: string): Promise<CancelSubscriptionResponse | null> {

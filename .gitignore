@@ -36,3 +36,6 @@ coverage
 
 # Misc
 *.pem
+
+#claude
+.claude/CLAUDE.md
