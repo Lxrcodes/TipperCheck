@@ -10,10 +10,11 @@ import { TermsPage } from '@/components/legal/TermsPage';
 import { Onboarding } from '@/components/onboarding/Onboarding';
 import { Dashboard } from '@/components/manager/Dashboard';
 import { CheckWizard } from '@/components/driver/CheckWizard';
+import { DriverLoadView } from '@/components/driver/DriverLoadView';
 import { useOffline } from '@/hooks/useOffline';
 import { refreshTemplateCache, refreshVehicleCache } from '@/services/syncManager';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
-import type { AuthUser, Organisation, Vehicle, VehicleType, CheckStatus, Job, JobStatus } from '@/types';
+import type { AuthUser, Organisation, Vehicle, VehicleType, CheckStatus, Job, JobStatus, JobAssignment } from '@/types';
 import { isManager, isDriver, canAccessTier, VEHICLE_TYPES } from '@/types';
 import { Loader2, AlertTriangle, Truck, CreditCard, RefreshCw, LogOut, XCircle, Plus, Trash2, ChevronRight } from 'lucide-react';
 import { createCheckoutSession } from '@/services/stripeClient';
@@ -586,10 +587,13 @@ interface DriverHomeProps {
   onCheckComplete: (status: CheckStatus) => void;
 }
 
+type DriverAssignment = JobAssignment & { jobs: Job };
+
 function DriverHome({ user, org, onCheckComplete }: DriverHomeProps) {
   const [tab, setTab] = useState<'checks' | 'jobs'>('checks');
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const [assignments, setAssignments] = useState<DriverAssignment[]>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
+  const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
 
   const hasJobs = canAccessTier(org, 2);
 
@@ -597,13 +601,13 @@ function DriverHome({ user, org, onCheckComplete }: DriverHomeProps) {
     if (!hasJobs) return;
     setJobsLoading(true);
     supabase
-      .from('jobs')
-      .select('*')
+      .from('job_assignments')
+      .select('*, jobs(*)')
       .eq('driver_id', user.id)
-      .not('status', 'eq', 'cancelled')
+      .not('jobs.status', 'eq', 'cancelled')
       .order('created_at', { ascending: false })
       .then(({ data }) => {
-        setJobs(data ?? []);
+        setAssignments((data ?? []).filter((a) => a.jobs) as DriverAssignment[]);
         setJobsLoading(false);
       });
   }, [user.id, hasJobs]);
@@ -620,7 +624,17 @@ function DriverHome({ user, org, onCheckComplete }: DriverHomeProps) {
     );
   }
 
-  const activeJobs = jobs.filter((j) => j.status === 'active');
+  // If a load view is open, render it full-screen
+  if (activeAssignmentId) {
+    return (
+      <DriverLoadView
+        assignmentId={activeAssignmentId}
+        onClose={() => setActiveAssignmentId(null)}
+      />
+    );
+  }
+
+  const activeAssignments = assignments.filter((a) => a.jobs?.status === 'active');
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
@@ -645,9 +659,9 @@ function DriverHome({ user, org, onCheckComplete }: DriverHomeProps) {
           }`}
         >
           My Jobs
-          {activeJobs.length > 0 && (
+          {activeAssignments.length > 0 && (
             <span className="absolute top-2 right-6 inline-flex items-center justify-center w-4 h-4 text-xs bg-orange-500 text-white rounded-full">
-              {activeJobs.length}
+              {activeAssignments.length}
             </span>
           )}
         </button>
@@ -667,40 +681,49 @@ function DriverHome({ user, org, onCheckComplete }: DriverHomeProps) {
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
             </div>
-          ) : jobs.length === 0 ? (
+          ) : assignments.length === 0 ? (
             <div className="bg-white rounded-xl border border-slate-200 p-10 text-center mt-4">
               <p className="text-slate-500 font-medium">No jobs assigned to you</p>
               <p className="text-slate-400 text-sm mt-1">Your manager will assign jobs here</p>
             </div>
           ) : (
             <div className="space-y-3 mt-2">
-              {jobs.map((job) => (
-                <div
-                  key={job.id}
-                  className="bg-white rounded-xl border border-slate-200 p-4"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono text-xs font-bold text-slate-500">{job.reference}</span>
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${DRIVER_JOB_STATUS_COLOR[job.status]}`}>
-                          {DRIVER_JOB_STATUS_LABEL[job.status]}
+              {assignments.map((assgn) => {
+                const job = assgn.jobs;
+                if (!job) return null;
+                return (
+                  <button
+                    key={assgn.id}
+                    onClick={() => setActiveAssignmentId(assgn.id)}
+                    className="w-full bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-orange-300 transition-all"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-mono text-xs font-bold text-slate-500">{job.reference}</span>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${DRIVER_JOB_STATUS_COLOR[job.status]}`}>
+                            {DRIVER_JOB_STATUS_LABEL[job.status]}
+                          </span>
+                        </div>
+                        <p className="font-semibold text-slate-900">{job.title}</p>
+                        {(job.collection_address || job.disposal_address) && (
+                          <p className="text-sm text-slate-500 mt-0.5 truncate">
+                            {job.collection_address?.split(',')[0]}{job.collection_address && job.disposal_address ? ' → ' : ''}{job.disposal_address?.split(',')[0]}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-mono text-xs font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded block mb-1">
+                          {job.job_code}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {assgn.loads_completed}/{assgn.loads_assigned} loads
                         </span>
                       </div>
-                      <p className="font-semibold text-slate-900">{job.title}</p>
-                      {job.site_address && (
-                        <p className="text-sm text-slate-500 mt-0.5">{job.site_address}</p>
-                      )}
-                      {job.description && (
-                        <p className="text-sm text-slate-400 mt-1">{job.description}</p>
-                      )}
                     </div>
-                    <span className="font-mono text-xs font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded shrink-0">
-                      {job.job_code}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

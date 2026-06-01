@@ -348,8 +348,6 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
             {activeTab === 'jobs' && (
               <JobsView
                 org={org}
-                vehicles={vehicles}
-                users={users}
                 onCreateJob={() => {
                   setEditingJob(null);
                   setShowJobModal(true);
@@ -1332,14 +1330,14 @@ const JOB_STATUS_COLOR: Record<JobStatus, string> = {
 
 interface JobsViewProps {
   org: Organisation;
-  vehicles: Vehicle[];
-  users: User[];
   onCreateJob: () => void;
   onEditJob: (job: Job) => void;
 }
 
-function JobsView({ org, vehicles, users, onCreateJob, onEditJob }: JobsViewProps) {
-  const [jobs, setJobs] = useState<Job[]>([]);
+type JobWithMaterial = Job & { material_types: { name: string; code: string } | null };
+
+function JobsView({ org, onCreateJob, onEditJob }: JobsViewProps) {
+  const [jobs, setJobs] = useState<JobWithMaterial[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<JobStatus | 'all'>('all');
 
@@ -1351,10 +1349,10 @@ function JobsView({ org, vehicles, users, onCreateJob, onEditJob }: JobsViewProp
     setLoading(true);
     const { data } = await supabase
       .from('jobs')
-      .select('*')
+      .select('*, material_types(name, code)')
       .eq('org_id', org.id)
       .order('created_at', { ascending: false });
-    setJobs(data ?? []);
+    setJobs((data ?? []) as JobWithMaterial[]);
     setLoading(false);
   };
 
@@ -1362,13 +1360,10 @@ function JobsView({ org, vehicles, users, onCreateJob, onEditJob }: JobsViewProp
     return (
       <UpgradePromptInline
         tierName="Manage"
-        features={['Create and assign haulage jobs', 'Track job status', 'Link jobs to vehicles and drivers', 'Invoice-ready job codes (e.g. AAA-INS-0001)']}
+        features={['Create and assign haulage jobs', 'Track job status and load progress', 'Multi-vehicle assignments', 'WTN (Waste Transfer Notes) with signatures']}
       />
     );
   }
-
-  const vehicleMap = Object.fromEntries(vehicles.map((v) => [v.id, v.registration]));
-  const userMap    = Object.fromEntries(users.map((u) => [u.id, u.name]));
 
   const filtered = statusFilter === 'all' ? jobs : jobs.filter((j) => j.status === statusFilter);
 
@@ -1434,7 +1429,7 @@ function JobsView({ org, vehicles, users, onCreateJob, onEditJob }: JobsViewProp
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="font-mono text-xs font-bold text-slate-500">{job.reference}</span>
                     <span className="font-mono text-xs font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded">
                       {job.job_code}
@@ -1442,16 +1437,30 @@ function JobsView({ org, vehicles, users, onCreateJob, onEditJob }: JobsViewProp
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${JOB_STATUS_COLOR[job.status]}`}>
                       {JOB_STATUS_LABEL[job.status]}
                     </span>
+                    {job.direction && (
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${job.direction === 'import' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>
+                        {job.direction === 'import' ? 'IN' : 'OUT'}
+                      </span>
+                    )}
+                    {job.material_types && (
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                        {job.material_types.code}
+                      </span>
+                    )}
                   </div>
                   <p className="font-semibold text-slate-900 truncate">{job.title}</p>
-                  {job.site_address && (
-                    <p className="text-sm text-slate-500 truncate mt-0.5">{job.site_address}</p>
+                  {(job.collection_address || job.disposal_address) && (
+                    <p className="text-xs text-slate-500 truncate mt-0.5">
+                      {job.collection_address && <span>{job.collection_address.split(',')[0]}</span>}
+                      {job.collection_address && job.disposal_address && <span className="mx-1 text-slate-300">→</span>}
+                      {job.disposal_address && <span>{job.disposal_address.split(',')[0]}</span>}
+                    </p>
                   )}
                 </div>
-                <div className="text-right text-xs text-slate-400 shrink-0">
-                  {job.driver_id && <p>{userMap[job.driver_id] ?? '—'}</p>}
-                  {job.vehicle_id && <p className="font-mono">{vehicleMap[job.vehicle_id] ?? '—'}</p>}
-                  <p className="mt-1">{new Date(job.created_at).toLocaleDateString('en-GB')}</p>
+                <div className="text-right text-xs text-slate-400 shrink-0 space-y-0.5">
+                  <p className="font-semibold text-slate-700">{job.total_loads} load{job.total_loads !== 1 ? 's' : ''}</p>
+                  {job.rate_per_load && <p>£{Number(job.rate_per_load).toFixed(2)}/load</p>}
+                  {job.start_date && <p>{new Date(job.start_date).toLocaleDateString('en-GB')}</p>}
                 </div>
               </div>
             </button>
