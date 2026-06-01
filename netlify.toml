@@ -9,6 +9,7 @@
   command = "npm run build"
   [context.dev.environment]
     NODE_ENV = "development"
+    VITE_APP_ENV = "demo"
 
 [[redirects]]
   from = "/*"
