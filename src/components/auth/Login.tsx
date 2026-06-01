@@ -50,8 +50,15 @@ export function Login({ onSuccess }: LoginProps) {
     }
   };
 
+  const isDemo = import.meta.env.VITE_APP_ENV === 'demo';
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-900">
+      {isDemo && (
+        <div className="w-full max-w-sm mb-4 px-4 py-2 bg-amber-400 text-amber-900 text-sm font-semibold text-center rounded-lg">
+          Demo Environment — for testing only
+        </div>
+      )}
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
