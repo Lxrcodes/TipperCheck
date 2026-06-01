@@ -59,6 +59,7 @@ import { UserModal } from './UserModal';
 import { MotRecordModal } from './MotRecordModal';
 import { PmiRecordModal } from './PmiRecordModal';
 import { JobModal } from './JobModal';
+import { JobDetailPanel } from './JobDetailPanel';
 
 type DashboardTab = 'today' | 'history' | 'jobs' | 'vehicles' | 'team' | 'defects' | 'settings';
 
@@ -1339,6 +1340,9 @@ function JobsView({ org, onCreateJob, onEditJob }: JobsViewProps) {
   const [jobs, setJobs] = useState<JobWithMaterial[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<JobStatus | 'all'>('all');
+  const [selectedJob, setSelectedJob] = useState<JobWithMaterial | null>(null);
+  const [loadsInProgress, setLoadsInProgress] = useState(0);
+  const [loadsCompletedToday, setLoadsCompletedToday] = useState(0);
 
   useEffect(() => {
     loadJobs();
@@ -1346,12 +1350,30 @@ function JobsView({ org, onCreateJob, onEditJob }: JobsViewProps) {
 
   const loadJobs = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('jobs')
-      .select('*, material_types(name, code)')
-      .eq('org_id', org.id)
-      .order('created_at', { ascending: false });
-    setJobs((data ?? []) as JobWithMaterial[]);
+    const today = new Date().toISOString().split('T')[0];
+
+    const [jobsRes, inProgressRes, completedTodayRes] = await Promise.all([
+      supabase
+        .from('jobs')
+        .select('*, material_types(name, code)')
+        .eq('org_id', org.id)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('loads')
+        .select('id', { count: 'exact', head: true })
+        .eq('org_id', org.id)
+        .in('status', ['collecting', 'collected', 'delivering']),
+      supabase
+        .from('loads')
+        .select('id', { count: 'exact', head: true })
+        .eq('org_id', org.id)
+        .eq('status', 'completed')
+        .gte('disposed_at', `${today}T00:00:00`),
+    ]);
+
+    setJobs((jobsRes.data ?? []) as JobWithMaterial[]);
+    setLoadsInProgress(inProgressRes.count ?? 0);
+    setLoadsCompletedToday(completedTodayRes.count ?? 0);
     setLoading(false);
   };
 
@@ -1364,11 +1386,23 @@ function JobsView({ org, onCreateJob, onEditJob }: JobsViewProps) {
     );
   }
 
+  // Drill-down view
+  if (selectedJob) {
+    return (
+      <JobDetailPanel
+        job={selectedJob}
+        onBack={() => { setSelectedJob(null); loadJobs(); }}
+        onEdit={() => onEditJob(selectedJob)}
+      />
+    );
+  }
+
+  const activeJobs = jobs.filter((j) => j.status === 'active');
   const filtered = statusFilter === 'all' ? jobs : jobs.filter((j) => j.status === statusFilter);
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Jobs</h1>
           <p className="text-sm text-slate-500 mt-0.5">{jobs.length} total</p>
@@ -1381,6 +1415,24 @@ function JobsView({ org, onCreateJob, onEditJob }: JobsViewProps) {
           New Job
         </button>
       </div>
+
+      {/* Summary stats */}
+      {jobs.length > 0 && (
+        <div className="grid grid-cols-3 gap-3 mb-5">
+          <div className="bg-white rounded-xl border border-slate-200 p-3 text-center">
+            <p className="text-2xl font-bold text-blue-600">{activeJobs.length}</p>
+            <p className="text-xs text-slate-500 mt-0.5">Active jobs</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-3 text-center">
+            <p className="text-2xl font-bold text-amber-500">{loadsInProgress}</p>
+            <p className="text-xs text-slate-500 mt-0.5">In progress</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-3 text-center">
+            <p className="text-2xl font-bold text-green-600">{loadsCompletedToday}</p>
+            <p className="text-xs text-slate-500 mt-0.5">Done today</p>
+          </div>
+        </div>
+      )}
 
       {/* Status filter */}
       <div className="flex gap-2 mb-4 flex-wrap">
@@ -1423,7 +1475,7 @@ function JobsView({ org, onCreateJob, onEditJob }: JobsViewProps) {
           {filtered.map((job) => (
             <button
               key={job.id}
-              onClick={() => onEditJob(job)}
+              onClick={() => setSelectedJob(job)}
               className="w-full bg-white rounded-xl border border-slate-200 p-4 hover:border-orange-300 hover:shadow-sm transition-all text-left"
             >
               <div className="flex items-start justify-between gap-3">
