@@ -18,7 +18,6 @@ interface AddressAutocompleteProps {
 
 declare global {
   interface Window {
-    google: typeof google;
     _mapsLoaded?: boolean;
     _mapsCallbacks?: (() => void)[];
   }
@@ -27,21 +26,29 @@ declare global {
 function loadMapsScript(apiKey: string): Promise<void> {
   return new Promise((resolve) => {
     if (window._mapsLoaded) { resolve(); return; }
+
     if (!window._mapsCallbacks) window._mapsCallbacks = [];
     window._mapsCallbacks.push(resolve);
+
+    // Script already injected — wait for it to fire
     if (document.getElementById('google-maps-script')) return;
 
     const script = document.createElement('script');
     script.id = 'google-maps-script';
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=_mapsReady`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
     script.async = true;
-    document.head.appendChild(script);
-
-    (window as unknown as Record<string, unknown>)['_mapsReady'] = () => {
+    script.defer = true;
+    script.onload = () => {
       window._mapsLoaded = true;
-      window._mapsCallbacks?.forEach(cb => cb());
+      window._mapsCallbacks?.forEach((cb) => cb());
       window._mapsCallbacks = [];
     };
+    script.onerror = () => {
+      // Remove the script tag so a retry is possible on next mount
+      script.remove();
+      window._mapsCallbacks = window._mapsCallbacks?.filter((cb) => cb !== resolve);
+    };
+    document.head.appendChild(script);
   });
 }
 
