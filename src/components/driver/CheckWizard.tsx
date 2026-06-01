@@ -95,13 +95,14 @@ interface CheckWizardProps {
   driverEmail: string;
   orgId: string;
   onComplete: (status: CheckStatus) => void;
+  initialVehicleId?: string;   // pre-select from job assignment
 }
 
 // ============================================================================
 // CheckWizard Component
 // ============================================================================
 
-export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckWizardProps) {
+export function CheckWizard({ driverId, driverEmail, orgId, onComplete, initialVehicleId }: CheckWizardProps) {
   // State
   const [step, setStep] = useState<WizardStep>('select_vehicle');
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -222,21 +223,38 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
     return () => clearInterval(interval);
   }, [startedAt]);
 
-  // Restore today's check after view switches (driver ↔ manager)
+  // Auto-restore: open today's check (or pre-select vehicle) after tab switches.
+  // Priority 1 — sessionStorage (set after any check in this session, includes check date guard).
+  // Priority 2 — initialVehicleId from job assignment (works on fresh load / new tab).
   useEffect(() => {
     if (autoRestoredRef.current || loading || vehicles.length === 0) return;
+
     const stored = sessionStorage.getItem('checkatruck_last_check');
-    if (!stored) return;
-    try {
-      const { vehicleId, checkDate } = JSON.parse(stored);
-      const today = new Date().toISOString().split('T')[0];
-      if (checkDate !== today) { sessionStorage.removeItem('checkatruck_last_check'); return; }
-      const vehicle = vehicles.find((v) => v.id === vehicleId);
+    if (stored) {
+      try {
+        const { vehicleId, checkDate } = JSON.parse(stored);
+        const today = new Date().toISOString().split('T')[0];
+        if (checkDate === today) {
+          const vehicle = vehicles.find((v) => v.id === vehicleId);
+          if (vehicle) {
+            autoRestoredRef.current = true;
+            handleSelectVehicle(vehicle);
+            return;
+          }
+        }
+        sessionStorage.removeItem('checkatruck_last_check');
+      } catch { sessionStorage.removeItem('checkatruck_last_check'); }
+    }
+
+    // Fallback: pre-select vehicle from job assignment (handleSelectVehicle will look up
+    // today's check in Supabase — shows receipt if done, starts check flow if not).
+    if (initialVehicleId) {
+      const vehicle = vehicles.find((v) => v.id === initialVehicleId);
       if (vehicle) {
         autoRestoredRef.current = true;
         handleSelectVehicle(vehicle);
       }
-    } catch { sessionStorage.removeItem('checkatruck_last_check'); }
+    }
   }, [vehicles, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Format elapsed time as MM:SS

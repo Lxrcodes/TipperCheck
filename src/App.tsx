@@ -596,6 +596,7 @@ function DriverHome({ user, org, onCheckComplete }: DriverHomeProps) {
   const [tab, setTab] = useState<'checks' | 'jobs'>('checks');
   const [assignments, setAssignments] = useState<DriverAssignment[]>([]);
   const [currentVehicleReg, setCurrentVehicleReg] = useState<string | null>(null);
+  const [currentVehicleId, setCurrentVehicleId] = useState<string | null>(null);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
 
@@ -616,11 +617,13 @@ function DriverHome({ user, org, onCheckComplete }: DriverHomeProps) {
     if (!lastCheck?.vehicle_id) {
       setAssignments([]);
       setCurrentVehicleReg(null);
+      setCurrentVehicleId(null);
       setJobsLoading(false);
       return;
     }
 
     setCurrentVehicleReg(lastCheck.vehicle_registration);
+    setCurrentVehicleId(lastCheck.vehicle_id);
 
     const { data } = await supabase
       .from('job_assignments')
@@ -701,6 +704,7 @@ function DriverHome({ user, org, onCheckComplete }: DriverHomeProps) {
           driverEmail={user.email}
           orgId={org.id}
           onComplete={onCheckComplete}
+          initialVehicleId={currentVehicleId ?? undefined}
         />
       ) : (
         <div className="flex-1 p-4 max-w-lg mx-auto w-full">
