@@ -983,112 +983,63 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete, initialV
   // Already checked today gate
   if (step === 'today_check' && lastCompletedCheck) {
     const check = lastCompletedCheck;
-    const defectCount = Array.from(check.results.values()).filter((r) => r.status === 'fail').length;
+
+    const statusColor = defectResolvedToday ? 'bg-amber-500' :
+      check.overallStatus === 'pass' ? 'bg-green-500' :
+      check.overallStatus === 'defects' ? 'bg-amber-500' : 'bg-red-500';
+
+    const statusLabel = defectResolvedToday ? 'Re-check Required' :
+      check.overallStatus === 'pass' ? 'Check Complete' :
+      check.overallStatus === 'defects' ? 'Check Complete — Defects Noted' :
+      'Do Not Drive';
+
+    const StatusIcon = defectResolvedToday ? AlertTriangle :
+      check.overallStatus === 'pass' ? CheckCircle2 :
+      check.overallStatus === 'defects' ? AlertTriangle : XCircle;
 
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col">
-        <div className="bg-slate-800 px-4 py-3">
-          <div className="flex items-center justify-between">
-            <button onClick={() => setStep('select_vehicle')} className="text-slate-400 hover:text-white">
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <span className="font-mono font-bold text-white">{check.vehicleReg}</span>
-            <div className="w-5" />
-          </div>
+        <div className="bg-slate-800 px-4 py-3 flex items-center justify-between">
+          <button onClick={() => setStep('select_vehicle')} className="text-slate-400 hover:text-white">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <span className="font-mono font-bold text-white">{check.vehicleReg}</span>
+          <div className="w-5" />
         </div>
 
-        <div className="flex-1 p-4 flex flex-col justify-center">
-          <div className="w-full max-w-md mx-auto space-y-4">
-            {/* Status banner */}
-            {defectResolvedToday ? (
-              <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-5 text-center">
-                <AlertTriangle className="w-10 h-10 text-amber-400 mx-auto mb-3" />
-                <h2 className="text-amber-400 font-bold text-lg mb-1">Re-check Required</h2>
-                <p className="text-slate-400 text-sm">
-                  A defect from your earlier check has been cleared by the workshop. You must complete a new walk-around before driving.
-                </p>
-              </div>
-            ) : (
-              <div className={`rounded-xl p-5 text-center ${
-                check.overallStatus === 'pass'
-                  ? 'bg-green-500/10 border border-green-500/40'
-                  : check.overallStatus === 'defects'
-                  ? 'bg-amber-500/10 border border-amber-500/40'
-                  : 'bg-red-500/10 border border-red-500/40'
-              }`}>
-                {check.overallStatus === 'pass'
-                  ? <CheckCircle2 className="w-10 h-10 text-green-400 mx-auto mb-3" />
-                  : check.overallStatus === 'defects'
-                  ? <AlertTriangle className="w-10 h-10 text-amber-400 mx-auto mb-3" />
-                  : <XCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />}
-                <h2 className={`font-bold text-lg mb-1 ${
-                  check.overallStatus === 'pass' ? 'text-green-400' :
-                  check.overallStatus === 'defects' ? 'text-amber-400' : 'text-red-400'
-                }`}>
-                  {check.overallStatus === 'pass' ? 'Passed' :
-                   check.overallStatus === 'defects' ? `${defectCount} Defect${defectCount !== 1 ? 's' : ''} Found` :
-                   'Do Not Drive'}
-                </h2>
-                <p className="text-slate-400 text-sm">
-                  This vehicle was checked today at {check.completedAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              </div>
-            )}
-
-            {/* Check details */}
-            <div className="bg-slate-800 rounded-lg p-4 text-sm space-y-2">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Vehicle</span>
-                <span className="text-white font-mono font-bold">{check.vehicleReg}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Driver</span>
-                <span className="text-white">{check.driverName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Checked at</span>
-                <span className="text-white">
-                  {check.completedAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Date</span>
-                <span className="text-white">
-                  {check.completedAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </span>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="space-y-3">
-              {!defectResolvedToday && (
-                <button
-                  onClick={() => setStep('receipt')}
-                  className="w-full py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors flex items-center justify-center gap-2"
-                >
-                  <CheckCircle2 className="w-5 h-5" />
-                  View Today's Check
-                </button>
-              )}
-              <button
-                onClick={() => setStep('intro')}
-                className={`w-full py-3 font-bold rounded-lg transition-colors flex items-center justify-center gap-2 ${
-                  defectResolvedToday
-                    ? 'bg-orange-500 text-white hover:bg-orange-600'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                }`}
-              >
-                <Truck className="w-5 h-5" />
-                {defectResolvedToday ? 'Start Re-check' : 'Check Again'}
-              </button>
-              <button
-                onClick={() => setStep('select_vehicle')}
-                className="w-full py-3 bg-slate-800 text-slate-400 font-medium rounded-lg hover:bg-slate-700 transition-colors"
-              >
-                Change Vehicle
-              </button>
+        <div className="p-4 space-y-3 max-w-md w-full mx-auto">
+          {/* Status */}
+          <div className={`${statusColor} rounded-xl p-5 flex items-center gap-4`}>
+            <StatusIcon className="w-8 h-8 text-white shrink-0" />
+            <div>
+              <p className="text-white font-bold text-base">{statusLabel}</p>
+              <p className="text-white/70 text-sm mt-0.5">
+                {check.vehicleReg} · {check.completedAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+              </p>
             </div>
           </div>
+
+          {/* Actions */}
+          {!defectResolvedToday && (
+            <button
+              onClick={() => setStep('receipt')}
+              className="w-full py-3 bg-slate-700 text-white font-bold rounded-xl hover:bg-slate-600 transition-colors"
+            >
+              View Today's Check
+            </button>
+          )}
+          <button
+            onClick={() => setStep('intro')}
+            className="w-full py-3 bg-slate-700 text-white font-bold rounded-xl hover:bg-slate-600 transition-colors"
+          >
+            {defectResolvedToday ? 'Start Re-check' : 'Check Again'}
+          </button>
+          <button
+            onClick={() => setStep('select_vehicle')}
+            className="w-full py-3 bg-slate-800 text-slate-400 font-medium rounded-xl hover:bg-slate-700 transition-colors"
+          >
+            Change Vehicle
+          </button>
         </div>
       </div>
     );
