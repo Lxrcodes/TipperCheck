@@ -13,8 +13,8 @@ import { CheckWizard } from '@/components/driver/CheckWizard';
 import { useOffline } from '@/hooks/useOffline';
 import { refreshTemplateCache, refreshVehicleCache } from '@/services/syncManager';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
-import type { AuthUser, Organisation, Vehicle, VehicleType, CheckStatus } from '@/types';
-import { isManager, isDriver, VEHICLE_TYPES } from '@/types';
+import type { AuthUser, Organisation, Vehicle, VehicleType, CheckStatus, Job, JobStatus } from '@/types';
+import { isManager, isDriver, canAccessTier, VEHICLE_TYPES } from '@/types';
 import { Loader2, AlertTriangle, Truck, CreditCard, RefreshCw, LogOut, XCircle, Plus, Trash2, ChevronRight } from 'lucide-react';
 import { createCheckoutSession } from '@/services/stripeClient';
 
@@ -566,6 +566,20 @@ function AppContent() {
 // DriverHome Component
 // ============================================================================
 
+const DRIVER_JOB_STATUS_LABEL: Record<JobStatus, string> = {
+  pending:   'Pending',
+  active:    'Active',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
+
+const DRIVER_JOB_STATUS_COLOR: Record<JobStatus, string> = {
+  pending:   'bg-slate-100 text-slate-700',
+  active:    'bg-blue-100 text-blue-700',
+  completed: 'bg-green-100 text-green-700',
+  cancelled: 'bg-red-100 text-red-700',
+};
+
 interface DriverHomeProps {
   user: AuthUser;
   org: Organisation;
@@ -573,13 +587,125 @@ interface DriverHomeProps {
 }
 
 function DriverHome({ user, org, onCheckComplete }: DriverHomeProps) {
+  const [tab, setTab] = useState<'checks' | 'jobs'>('checks');
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(false);
+
+  const hasJobs = canAccessTier(org, 2);
+
+  useEffect(() => {
+    if (!hasJobs) return;
+    setJobsLoading(true);
+    supabase
+      .from('jobs')
+      .select('*')
+      .eq('driver_id', user.id)
+      .not('status', 'eq', 'cancelled')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setJobs(data ?? []);
+        setJobsLoading(false);
+      });
+  }, [user.id, hasJobs]);
+
+  // Tier 1 — no jobs feature, just CheckWizard
+  if (!hasJobs) {
+    return (
+      <CheckWizard
+        driverId={user.id}
+        driverEmail={user.email}
+        orgId={org.id}
+        onComplete={onCheckComplete}
+      />
+    );
+  }
+
+  const activeJobs = jobs.filter((j) => j.status === 'active');
+
   return (
-    <CheckWizard
-      driverId={user.id}
-      driverEmail={user.email}
-      orgId={org.id}
-      onComplete={onCheckComplete}
-    />
+    <div className="min-h-screen bg-slate-100 flex flex-col">
+      {/* Tab bar */}
+      <div className="bg-white border-b border-slate-200 flex">
+        <button
+          onClick={() => setTab('checks')}
+          className={`flex-1 py-3 text-sm font-bold transition-colors ${
+            tab === 'checks'
+              ? 'text-orange-500 border-b-2 border-orange-500'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Walk-Around Check
+        </button>
+        <button
+          onClick={() => setTab('jobs')}
+          className={`flex-1 py-3 text-sm font-bold transition-colors relative ${
+            tab === 'jobs'
+              ? 'text-orange-500 border-b-2 border-orange-500'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          My Jobs
+          {activeJobs.length > 0 && (
+            <span className="absolute top-2 right-6 inline-flex items-center justify-center w-4 h-4 text-xs bg-orange-500 text-white rounded-full">
+              {activeJobs.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Tab content */}
+      {tab === 'checks' ? (
+        <CheckWizard
+          driverId={user.id}
+          driverEmail={user.email}
+          orgId={org.id}
+          onComplete={onCheckComplete}
+        />
+      ) : (
+        <div className="flex-1 p-4 max-w-lg mx-auto w-full">
+          {jobsLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
+            </div>
+          ) : jobs.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-10 text-center mt-4">
+              <p className="text-slate-500 font-medium">No jobs assigned to you</p>
+              <p className="text-slate-400 text-sm mt-1">Your manager will assign jobs here</p>
+            </div>
+          ) : (
+            <div className="space-y-3 mt-2">
+              {jobs.map((job) => (
+                <div
+                  key={job.id}
+                  className="bg-white rounded-xl border border-slate-200 p-4"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-mono text-xs font-bold text-slate-500">{job.reference}</span>
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${DRIVER_JOB_STATUS_COLOR[job.status]}`}>
+                          {DRIVER_JOB_STATUS_LABEL[job.status]}
+                        </span>
+                      </div>
+                      <p className="font-semibold text-slate-900">{job.title}</p>
+                      {job.site_address && (
+                        <p className="text-sm text-slate-500 mt-0.5">{job.site_address}</p>
+                      )}
+                      {job.description && (
+                        <p className="text-sm text-slate-400 mt-1">{job.description}</p>
+                      )}
+                    </div>
+                    <span className="font-mono text-xs font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded shrink-0">
+                      {job.job_code}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -30,6 +30,7 @@ import {
   ClipboardCheck,
   Wrench,
   ArrowUpDown,
+  Briefcase,
 } from 'lucide-react';
 import type {
   AuthUser,
@@ -39,6 +40,8 @@ import type {
   CheckRun,
   Defect,
   VehicleStatus,
+  Job,
+  JobStatus,
 } from '@/types';
 import {
   VEHICLE_TYPES,
@@ -49,13 +52,15 @@ import {
   getSeverityColor,
   getDefectStatusLabel,
   isDriver,
+  canAccessTier,
 } from '@/types';
 import { VehicleModal } from './VehicleModal';
 import { UserModal } from './UserModal';
 import { MotRecordModal } from './MotRecordModal';
 import { PmiRecordModal } from './PmiRecordModal';
+import { JobModal } from './JobModal';
 
-type DashboardTab = 'today' | 'history' | 'vehicles' | 'team' | 'defects' | 'settings';
+type DashboardTab = 'today' | 'history' | 'jobs' | 'vehicles' | 'team' | 'defects' | 'settings';
 
 interface DashboardProps {
   user: AuthUser;
@@ -85,6 +90,8 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
   const [motVehicle, setMotVehicle] = useState<Vehicle | null>(null);
   const [showPmiModal, setShowPmiModal] = useState(false);
   const [pmiVehicle, setPmiVehicle] = useState<Vehicle | null>(null);
+  const [showJobModal, setShowJobModal] = useState(false);
+  const [editingJob, setEditingJob] = useState<Job | null>(null);
 
   // Load data
   useEffect(() => {
@@ -150,6 +157,12 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
   const handlePmiSaved = () => {
     setShowPmiModal(false);
     setPmiVehicle(null);
+    loadData();
+  };
+
+  const handleJobSaved = () => {
+    setShowJobModal(false);
+    setEditingJob(null);
     loadData();
   };
 
@@ -253,6 +266,13 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
             onClick={() => handleTabChange('history')}
           />
           <NavItem
+            icon={Briefcase}
+            label="Jobs"
+            active={activeTab === 'jobs'}
+            onClick={() => handleTabChange('jobs')}
+            locked={!canAccessTier(org, 2)}
+          />
+          <NavItem
             icon={Truck}
             label="Vehicles"
             active={activeTab === 'vehicles'}
@@ -325,6 +345,21 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
                 vehicles={vehicles}
               />
             )}
+            {activeTab === 'jobs' && (
+              <JobsView
+                org={org}
+                vehicles={vehicles}
+                users={users}
+                onCreateJob={() => {
+                  setEditingJob(null);
+                  setShowJobModal(true);
+                }}
+                onEditJob={(j) => {
+                  setEditingJob(j);
+                  setShowJobModal(true);
+                }}
+              />
+            )}
             {activeTab === 'vehicles' && (
               <VehiclesView
                 vehicles={vehicles}
@@ -363,6 +398,21 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
       </main>
 
       {/* Modals */}
+      {showJobModal && (
+        <JobModal
+          job={editingJob}
+          orgId={org.id}
+          userId={user.id}
+          vehicles={vehicles}
+          drivers={users}
+          onClose={() => {
+            setShowJobModal(false);
+            setEditingJob(null);
+          }}
+          onSaved={handleJobSaved}
+        />
+      )}
+
       {showVehicleModal && (
         <VehicleModal
           vehicle={editingVehicle}
@@ -431,9 +481,10 @@ interface NavItemProps {
   onClick: () => void;
   badge?: number;
   badgeColor?: 'orange' | 'red' | 'amber';
+  locked?: boolean;
 }
 
-function NavItem({ icon: Icon, label, active, onClick, badge, badgeColor = 'orange' }: NavItemProps) {
+function NavItem({ icon: Icon, label, active, onClick, badge, badgeColor = 'orange', locked }: NavItemProps) {
   const badgeColors = {
     orange: 'bg-orange-500',
     red: 'bg-red-500',
@@ -444,14 +495,17 @@ function NavItem({ icon: Icon, label, active, onClick, badge, badgeColor = 'oran
     <button
       onClick={onClick}
       className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-        active
+        locked
+          ? 'text-slate-600 cursor-pointer'
+          : active
           ? 'bg-orange-500 text-white'
           : 'text-slate-300 hover:bg-slate-800'
       }`}
     >
       <Icon className="w-5 h-5" />
       <span className="flex-1 text-left">{label}</span>
-      {badge !== undefined && (
+      {locked && <Lock className="w-3.5 h-3.5 text-slate-500" />}
+      {!locked && badge !== undefined && (
         <span
           className={`px-2 py-0.5 text-xs font-bold rounded-full ${
             active ? 'bg-white/20 text-white' : `${badgeColors[badgeColor]} text-white`
@@ -1256,6 +1310,183 @@ function StorageImage({ url, alt, className }: { url: string; alt: string; class
 
   if (gone) return null;
   return <img src={src} alt={alt} className={className} onError={handleError} />;
+}
+
+// ============================================================================
+// JobsView Component — Tier 2 (Manage) feature
+// ============================================================================
+
+const JOB_STATUS_LABEL: Record<JobStatus, string> = {
+  pending:   'Pending',
+  active:    'Active',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
+
+const JOB_STATUS_COLOR: Record<JobStatus, string> = {
+  pending:   'bg-slate-100 text-slate-700',
+  active:    'bg-blue-100 text-blue-700',
+  completed: 'bg-green-100 text-green-700',
+  cancelled: 'bg-red-100 text-red-700',
+};
+
+interface JobsViewProps {
+  org: Organisation;
+  vehicles: Vehicle[];
+  users: User[];
+  onCreateJob: () => void;
+  onEditJob: (job: Job) => void;
+}
+
+function JobsView({ org, vehicles, users, onCreateJob, onEditJob }: JobsViewProps) {
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<JobStatus | 'all'>('all');
+
+  useEffect(() => {
+    loadJobs();
+  }, [org.id]);
+
+  const loadJobs = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('jobs')
+      .select('*')
+      .eq('org_id', org.id)
+      .order('created_at', { ascending: false });
+    setJobs(data ?? []);
+    setLoading(false);
+  };
+
+  if (!canAccessTier(org, 2)) {
+    return (
+      <UpgradePromptInline
+        tierName="Manage"
+        features={['Create and assign haulage jobs', 'Track job status', 'Link jobs to vehicles and drivers', 'Invoice-ready job codes (e.g. AAA-INS-0001)']}
+      />
+    );
+  }
+
+  const vehicleMap = Object.fromEntries(vehicles.map((v) => [v.id, v.registration]));
+  const userMap    = Object.fromEntries(users.map((u) => [u.id, u.name]));
+
+  const filtered = statusFilter === 'all' ? jobs : jobs.filter((j) => j.status === statusFilter);
+
+  return (
+    <div className="p-4 md:p-6 max-w-4xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Jobs</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{jobs.length} total</p>
+        </div>
+        <button
+          onClick={onCreateJob}
+          className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors text-sm"
+        >
+          <Plus className="w-4 h-4" />
+          New Job
+        </button>
+      </div>
+
+      {/* Status filter */}
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {(['all', 'pending', 'active', 'completed', 'cancelled'] as const).map((s) => (
+          <button
+            key={s}
+            onClick={() => setStatusFilter(s)}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              statusFilter === s
+                ? 'bg-orange-500 text-white'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            {s === 'all' ? 'All' : JOB_STATUS_LABEL[s]}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+          <Briefcase className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+          <p className="text-slate-500 font-medium">
+            {statusFilter === 'all' ? 'No jobs yet' : `No ${JOB_STATUS_LABEL[statusFilter].toLowerCase()} jobs`}
+          </p>
+          {statusFilter === 'all' && (
+            <button
+              onClick={onCreateJob}
+              className="mt-4 px-4 py-2 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 text-sm"
+            >
+              Create first job
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((job) => (
+            <button
+              key={job.id}
+              onClick={() => onEditJob(job)}
+              className="w-full bg-white rounded-xl border border-slate-200 p-4 hover:border-orange-300 hover:shadow-sm transition-all text-left"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-mono text-xs font-bold text-slate-500">{job.reference}</span>
+                    <span className="font-mono text-xs font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded">
+                      {job.job_code}
+                    </span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${JOB_STATUS_COLOR[job.status]}`}>
+                      {JOB_STATUS_LABEL[job.status]}
+                    </span>
+                  </div>
+                  <p className="font-semibold text-slate-900 truncate">{job.title}</p>
+                  {job.site_address && (
+                    <p className="text-sm text-slate-500 truncate mt-0.5">{job.site_address}</p>
+                  )}
+                </div>
+                <div className="text-right text-xs text-slate-400 shrink-0">
+                  {job.driver_id && <p>{userMap[job.driver_id] ?? '—'}</p>}
+                  {job.vehicle_id && <p className="font-mono">{vehicleMap[job.vehicle_id] ?? '—'}</p>}
+                  <p className="mt-1">{new Date(job.created_at).toLocaleDateString('en-GB')}</p>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Inline upgrade prompt (lighter than UpgradePrompt component — no org/Stripe context needed here)
+function UpgradePromptInline({ tierName, features }: { tierName: string; features: string[] }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[400px] p-6">
+      <div className="w-full max-w-md bg-white rounded-xl shadow-sm border border-slate-200 p-6 text-center">
+        <div className="inline-flex items-center justify-center w-14 h-14 bg-orange-100 rounded-full mb-4">
+          <Lock className="w-7 h-7 text-orange-500" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900 mb-1">{tierName} plan required</h2>
+        <p className="text-slate-500 text-sm mb-6">Upgrade your plan to unlock this feature.</p>
+        <div className="bg-slate-50 rounded-lg p-4 text-left">
+          <p className="text-xs font-bold text-slate-400 uppercase mb-3">What you'll get</p>
+          <ul className="space-y-2">
+            {features.map((f) => (
+              <li key={f} className="flex items-start gap-2 text-sm text-slate-700">
+                <ChevronRight className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                {f}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p className="text-xs text-slate-400 mt-6">Contact us to upgrade your plan.</p>
+      </div>
+    </div>
+  );
 }
 
 // ============================================================================
