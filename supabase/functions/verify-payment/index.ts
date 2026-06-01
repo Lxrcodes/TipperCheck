@@ -33,7 +33,6 @@ serve(async (req) => {
       );
     }
 
-    // Retrieve the checkout session from Stripe with subscription expanded
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ['subscription'],
     });
@@ -54,12 +53,16 @@ serve(async (req) => {
       );
     }
 
-    // Update the org with the confirmed subscription details
+    const tier = parseInt(subscription.metadata?.tier ?? '1', 10);
+    const priceId = subscription.items.data[0]?.price?.id ?? null;
+
     await supabase
       .from('organisations')
       .update({
         subscription_id: subscription.id,
         subscription_status: subscription.status,
+        subscription_tier: tier,
+        stripe_price_id: priceId,
         stripe_customer_id: session.customer as string,
         cancel_at_period_end: subscription.cancel_at_period_end,
         current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/services/supabaseClient';
-import { createCheckoutSession } from '@/services/stripeClient';
+import { createCheckoutSession, TIER_NAMES, TIER_FEATURES, getWeeklyRateForTier, getAnnualTotalForTier } from '@/services/stripeClient';
 import {
   Truck,
   Users,
@@ -26,7 +26,7 @@ interface OnboardingProps {
   onBack: () => void;
 }
 
-type OnboardingStep = 'type' | 'org' | 'vehicle' | 'first_check' | 'add_vehicles' | 'payment' | 'complete';
+type OnboardingStep = 'type' | 'org' | 'vehicle' | 'first_check' | 'add_vehicles' | 'tier' | 'payment' | 'complete';
 
 interface AdditionalVehicle {
   registration: string;
@@ -44,6 +44,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
+  const [selectedTier, setSelectedTier] = useState<number>(1);
 
   // Created IDs (after org/user/vehicle creation)
   const [createdOrgId, setCreatedOrgId] = useState<string | null>(null);
@@ -154,7 +155,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
     setError(null);
 
     try {
-      const checkoutUrl = await createCheckoutSession(createdOrgId);
+      const checkoutUrl = await createCheckoutSession(createdOrgId, selectedTier);
 
       if (checkoutUrl) {
         window.location.href = checkoutUrl;
@@ -329,7 +330,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
     }
   };
 
-  // Proceed to payment
+  // Proceed to payment with selected tier
   const handleProceedToPayment = async () => {
     if (!createdOrgId) return;
 
@@ -337,7 +338,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
     setError(null);
 
     try {
-      const checkoutUrl = await createCheckoutSession(createdOrgId);
+      const checkoutUrl = await createCheckoutSession(createdOrgId, selectedTier);
 
       if (checkoutUrl) {
         window.location.href = checkoutUrl;
@@ -353,11 +354,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
     }
   };
 
-  // Calculate total vehicles and pricing with VAT
   const totalVehicles = 1 + additionalVehicles.length;
-  const yearlySubtotal = totalVehicles * 36.40;
-  const yearlyVat = yearlySubtotal * 0.20;
-  const yearlyTotal = (yearlySubtotal + yearlyVat).toFixed(2);
 
   // ============================================================================
   // Step: Type Selection
@@ -810,40 +807,81 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
             </button>
           )}
 
-          {/* Free trial banner */}
-          <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4 text-center">
-            <p className="text-green-400 font-bold text-sm">🎉 7-day free trial included</p>
-            <p className="text-green-300 text-xs mt-1">You won't be charged until your trial ends. Cancel anytime.</p>
+          {/* Continue to plan selection */}
+          <button
+            onClick={() => setStep('tier')}
+            className="w-full py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors flex items-center justify-center gap-2"
+          >
+            <ChevronRight className="w-5 h-5" />
+            Choose Your Plan
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // Step: Tier Selection
+  // ============================================================================
+  if (step === 'tier') {
+    const tiers = [1, 2, 3];
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-lg">
+          <button
+            onClick={() => setStep('add_vehicles')}
+            className="flex items-center gap-1 text-slate-400 hover:text-white mb-6"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Back
+          </button>
+
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-heading text-white">Choose Your Plan</h1>
+            <p className="text-slate-400 mt-1">All plans include a 7-day free trial</p>
           </div>
 
-          {/* Pricing summary */}
-          <div className="bg-slate-800 rounded-lg p-4 mb-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-400">Vehicles</span>
-              <span className="text-white font-bold">{totalVehicles}</span>
-            </div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-400">Price per vehicle</span>
-              <span className="text-white">£36.40/year</span>
-            </div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-400">Subtotal</span>
-              <span className="text-white">£{yearlySubtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-400">VAT (20%)</span>
-              <span className="text-white">£{yearlyVat.toFixed(2)}</span>
-            </div>
-            <div className="border-t border-slate-700 pt-2 mt-2">
-              <div className="flex items-center justify-between">
-                <span className="text-white font-bold">Yearly total</span>
-                <span className="text-orange-500 font-bold text-lg">£{yearlyTotal}</span>
-              </div>
-              <p className="text-slate-500 text-xs mt-1">Inc. VAT — due after 7-day free trial</p>
-            </div>
+          <div className="space-y-3 mb-6">
+            {tiers.map((tier) => {
+              const weekly = getWeeklyRateForTier(tier, totalVehicles);
+              const annual = getAnnualTotalForTier(tier, totalVehicles);
+              const annualVat = annual * 0.20;
+              const isSelected = selectedTier === tier;
+              return (
+                <button
+                  key={tier}
+                  onClick={() => setSelectedTier(tier)}
+                  className={`w-full p-4 rounded-xl border-2 text-left transition-colors ${
+                    isSelected
+                      ? 'border-orange-500 bg-orange-500/10'
+                      : 'border-slate-700 bg-slate-800 hover:border-slate-500'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <span className="font-bold text-white">{TIER_NAMES[tier]}</span>
+                      {tier === 2 && (
+                        <span className="ml-2 text-xs font-semibold bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">Popular</span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <div className="text-white font-bold">£{weekly.toFixed(2)}<span className="text-slate-400 text-xs font-normal">/vehicle/week</span></div>
+                      <div className="text-slate-400 text-xs">£{(annual + annualVat).toFixed(2)}/year inc. VAT for {totalVehicles} vehicle{totalVehicles !== 1 ? 's' : ''}</div>
+                    </div>
+                  </div>
+                  <ul className="space-y-1">
+                    {TIER_FEATURES[tier].map((f) => (
+                      <li key={f} className="text-xs text-slate-400 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Continue to payment */}
           <button
             onClick={handleProceedToPayment}
             disabled={loading}
@@ -854,13 +892,12 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
             ) : (
               <>
                 <CreditCard className="w-5 h-5" />
-                Start Free Trial
+                Start Free Trial — {TIER_NAMES[selectedTier]}
               </>
             )}
           </button>
-
           <p className="text-center text-slate-500 text-xs mt-3">
-            Card details required to start — no charge for 7 days
+            Card details required — no charge for 7 days
           </p>
         </div>
       </div>

@@ -30,26 +30,27 @@ serve(async (req) => {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
 
-        // The org_id is in the subscription metadata, not session metadata
-        // We need to retrieve the subscription to get it
         if (session.subscription) {
           const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
           const orgId = subscription.metadata?.org_id;
 
           if (orgId) {
-            // Update organisation with subscription ID and period info
-            // Use subscription.status so trialing subscriptions are stored as 'trialing'
+            const tier = parseInt(subscription.metadata?.tier ?? '1', 10);
+            const priceId = subscription.items.data[0]?.price?.id ?? null;
+
             await supabase
               .from('organisations')
               .update({
                 subscription_id: session.subscription as string,
                 subscription_status: subscription.status,
+                subscription_tier: tier,
+                stripe_price_id: priceId,
                 cancel_at_period_end: subscription.cancel_at_period_end,
                 current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
               })
               .eq('id', orgId);
 
-            console.log(`Subscription created for org ${orgId}`);
+            console.log(`Subscription created for org ${orgId}, tier ${tier}`);
           } else {
             console.log('No org_id found in subscription metadata');
           }
@@ -62,16 +63,21 @@ serve(async (req) => {
         const orgId = subscription.metadata?.org_id;
 
         if (orgId) {
+          const tier = parseInt(subscription.metadata?.tier ?? '1', 10);
+          const priceId = subscription.items.data[0]?.price?.id ?? null;
+
           await supabase
             .from('organisations')
             .update({
               subscription_status: subscription.status as string,
+              subscription_tier: tier,
+              stripe_price_id: priceId,
               cancel_at_period_end: subscription.cancel_at_period_end,
               current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
             })
             .eq('id', orgId);
 
-          console.log(`Subscription updated for org ${orgId}: ${subscription.status}, cancel_at_period_end: ${subscription.cancel_at_period_end}`);
+          console.log(`Subscription updated for org ${orgId}: tier ${tier}, status ${subscription.status}`);
         }
         break;
       }

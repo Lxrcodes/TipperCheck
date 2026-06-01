@@ -20,19 +20,44 @@ export function isStripeConfigured(): boolean {
 }
 
 // ============================================================================
-// Billing Constants
+// Pricing
 // ============================================================================
 
-export const PRICING = {
-  // 70p per vehicle per week, billed annually
-  PRICE_PER_VEHICLE_WEEKLY: 0.70,
-  // £36.40 per vehicle per year (70p * 52 weeks)
-  PRICE_PER_VEHICLE_YEARLY: 36.40,
-  // No free vehicles - all vehicles are billed
-  FREE_VEHICLES: 0,
-  // Currency
-  CURRENCY: 'gbp',
+export const TIER_NAMES: Record<number, string> = {
+  1: 'Comply',
+  2: 'Manage',
+  3: 'Control',
 };
+
+// Weekly per-vehicle rates per tier per volume band (pence)
+// Band thresholds: 1-10, 11-25, 26-50, 51+
+export const TIER_WEEKLY_RATES: Record<number, number[]> = {
+  1: [0.70, 0.63, 0.60, 0.56],
+  2: [1.50, 1.35, 1.28, 1.20],
+  3: [2.50, 2.25, 2.13, 2.00],
+};
+
+export const TIER_FEATURES: Record<number, string[]> = {
+  1: ['DVSA-compliant daily checks', 'Defect management', 'Audit trail', 'Manager dashboard'],
+  2: ['Everything in Comply', 'Job management', 'MOT & service date tracking', 'Compliance notifications'],
+  3: ['Everything in Manage', 'Invoicing', 'Analytics dashboard'],
+};
+
+export function getVolumeBandIndex(vehicleCount: number): number {
+  if (vehicleCount <= 10) return 0;
+  if (vehicleCount <= 25) return 1;
+  if (vehicleCount <= 50) return 2;
+  return 3;
+}
+
+export function getWeeklyRateForTier(tier: number, vehicleCount: number): number {
+  const rates = TIER_WEEKLY_RATES[tier] ?? TIER_WEEKLY_RATES[1];
+  return rates[getVolumeBandIndex(vehicleCount)];
+}
+
+export function getAnnualTotalForTier(tier: number, vehicleCount: number): number {
+  return getWeeklyRateForTier(tier, vehicleCount) * 52 * vehicleCount;
+}
 
 // ============================================================================
 // Billing API Calls (via Supabase Edge Functions)
@@ -51,10 +76,10 @@ interface PortalResponse {
 /**
  * Create a Stripe Checkout session for initial subscription
  */
-export async function createCheckoutSession(orgId: string): Promise<string | null> {
+export async function createCheckoutSession(orgId: string, tier = 1): Promise<string | null> {
   try {
     const { data, error } = await supabase.functions.invoke<CheckoutResponse>('create-checkout', {
-      body: { orgId },
+      body: { orgId, tier },
     });
 
     if (error) {
@@ -66,6 +91,27 @@ export async function createCheckoutSession(orgId: string): Promise<string | nul
   } catch (err) {
     console.error('Failed to create checkout session:', err);
     return null;
+  }
+}
+
+/**
+ * Upgrade an org to a higher tier immediately with proration
+ */
+export async function upgradeTier(orgId: string, newTier: number): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.functions.invoke<{ success: boolean }>('upgrade-tier', {
+      body: { orgId, newTier },
+    });
+
+    if (error) {
+      console.error('Upgrade tier error:', error);
+      return false;
+    }
+
+    return data?.success ?? false;
+  } catch (err) {
+    console.error('Failed to upgrade tier:', err);
+    return false;
   }
 }
 
@@ -121,27 +167,6 @@ interface CancelSubscriptionResponse {
 }
 
 /**
- * Immediately cancel a subscription — used when deleting an account
- */
-export async function cancelSubscriptionImmediately(orgId: string): Promise<boolean> {
-  try {
-    const { data, error } = await supabase.functions.invoke<{ success: boolean }>('cancel-subscription', {
-      body: { orgId, action: 'cancel_immediately' },
-    });
-
-    if (error) {
-      console.error('Immediate cancel error:', error);
-      return false;
-    }
-
-    return data?.success ?? false;
-  } catch (err) {
-    console.error('Failed to immediately cancel subscription:', err);
-    return false;
-  }
-}
-
-/**
  * Cancel subscription at end of billing period
  */
 export async function cancelSubscription(orgId: string): Promise<CancelSubscriptionResponse | null> {
@@ -180,5 +205,26 @@ export async function reactivateSubscription(orgId: string): Promise<CancelSubsc
   } catch (err) {
     console.error('Failed to reactivate subscription:', err);
     return null;
+  }
+}
+
+/**
+ * Immediately cancel a subscription — used when deleting an account
+ */
+export async function cancelSubscriptionImmediately(orgId: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.functions.invoke<{ success: boolean }>('cancel-subscription', {
+      body: { orgId, action: 'cancel_immediately' },
+    });
+
+    if (error) {
+      console.error('Immediate cancel error:', error);
+      return false;
+    }
+
+    return data?.success ?? false;
+  } catch (err) {
+    console.error('Failed to immediately cancel subscription:', err);
+    return false;
   }
 }

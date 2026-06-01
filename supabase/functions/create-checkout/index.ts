@@ -17,14 +17,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const TIER_PRICE_ENV: Record<number, string> = {
+  1: 'STRIPE_PRICE_T1',
+  2: 'STRIPE_PRICE_T2',
+  3: 'STRIPE_PRICE_T3',
+};
+
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { orgId } = await req.json();
+    const { orgId, tier = 1 } = await req.json();
 
     if (!orgId) {
       return new Response(
@@ -33,7 +38,17 @@ serve(async (req) => {
       );
     }
 
-    // Get org details
+    const selectedTier = [1, 2, 3].includes(tier) ? tier : 1;
+    const priceEnvKey = TIER_PRICE_ENV[selectedTier];
+    const priceId = Deno.env.get(priceEnvKey);
+
+    if (!priceId) {
+      return new Response(
+        JSON.stringify({ error: `Stripe price not configured for tier ${selectedTier}` }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const { data: org, error: orgError } = await supabase
       .from('organisations')
@@ -59,37 +74,34 @@ serve(async (req) => {
       });
       customerId = customer.id;
 
-      // Save customer ID
       await supabase
         .from('organisations')
         .update({ stripe_customer_id: customerId })
         .eq('id', orgId);
     }
 
-    // Count active vehicles (all vehicles are billable)
     const { count: vehicleCount } = await supabase
       .from('vehicles')
       .select('*', { count: 'exact', head: true })
       .eq('org_id', orgId)
       .eq('status', 'active');
 
-    const billableVehicles = vehicleCount ?? 0;
+    const billableVehicles = vehicleCount ?? 1;
 
-    // Create checkout session with metered billing
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       line_items: [
         {
-          price: Deno.env.get('STRIPE_PRICE_ID'), // Your price ID from Stripe
-          quantity: billableVehicles || 1, // At least 1 for subscription
+          price: priceId,
+          quantity: billableVehicles,
         },
       ],
       success_url: `${(Deno.env.get('APP_URL') ?? '').replace(/\/$/, '')}/?billing=success&org_id=${orgId}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${(Deno.env.get('APP_URL') ?? '').replace(/\/$/, '')}/`,
       subscription_data: {
         trial_period_days: 7,
-        metadata: { org_id: orgId },
+        metadata: { org_id: orgId, tier: String(selectedTier) },
       },
     });
 

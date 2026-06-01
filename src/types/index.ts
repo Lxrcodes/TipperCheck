@@ -52,6 +52,8 @@ export interface Organisation {
   stripe_customer_id: string | null;
   subscription_id: string | null;
   subscription_status: SubscriptionStatus | null;
+  subscription_tier: number;
+  stripe_price_id: string | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   active_vehicle_count: number;
@@ -339,6 +341,16 @@ export function isDriver(user: AuthUser | null): boolean {
  */
 export function isOwnerOperator(user: AuthUser | null): boolean {
   return isManager(user) && isDriver(user);
+}
+
+/**
+ * Check if an org can access a given feature tier.
+ * Demo orgs bypass all tier checks.
+ */
+export function canAccessTier(org: Organisation | null, requiredTier: number): boolean {
+  if (!org) return false;
+  if (org.is_demo) return true;
+  return (org.subscription_tier ?? 1) >= requiredTier;
 }
 
 // ----------------------------------------------------------------------------
