@@ -29,6 +29,7 @@ export function VehicleModal({ vehicle, orgId, userId, onClose, onSaved }: Vehic
   const [pmiIntervalWeeks, setPmiIntervalWeeks] = useState(vehicle?.pmi_interval_weeks ?? 6);
   const [status, setStatus] = useState<VehicleStatus>(vehicle?.status ?? 'active');
   const [statusNotes, setStatusNotes] = useState(vehicle?.status_notes ?? '');
+  const [requiresRecheck, setRequiresRecheck] = useState(vehicle?.requires_recheck ?? false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +57,7 @@ export function VehicleModal({ vehicle, orgId, userId, onClose, onSaved }: Vehic
         pmi_interval_weeks: pmiIntervalWeeks,
         status,
         status_notes: statusNotes.trim() || null,
+        requires_recheck: requiresRecheck,
         status_changed_at: vehicle?.status !== status ? new Date().toISOString() : vehicle?.status_changed_at,
         status_changed_by: vehicle?.status !== status ? userId : vehicle?.status_changed_by,
       };
@@ -271,6 +273,26 @@ export function VehicleModal({ vehicle, orgId, userId, onClose, onSaved }: Vehic
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg resize-none focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                   placeholder="Reason for VOR / retirement..."
                 />
+              </div>
+            )}
+
+            {isEditing && (
+              <div className="col-span-2 border-t border-slate-100 pt-3">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={requiresRecheck}
+                    onChange={(e) => setRequiresRecheck(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 text-orange-500 rounded border-slate-300 focus:ring-orange-500"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">Require driver re-check</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Driver must complete a new walk-around before driving this vehicle.
+                      Cleared automatically when a passing check is submitted.
+                    </p>
+                  </div>
+                </label>
               </div>
             )}
           </div>

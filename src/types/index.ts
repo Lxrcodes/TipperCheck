@@ -106,6 +106,7 @@ export interface Vehicle {
   last_pmi_date: string | null;
   next_pmi_due_date: string | null;
   pmi_interval_weeks: number;
+  requires_recheck: boolean;
   status: VehicleStatus;
   status_changed_at: string | null;
   status_changed_by: string | null;

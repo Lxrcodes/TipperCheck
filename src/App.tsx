@@ -534,9 +534,9 @@ function AppContent() {
               </div>
               <button
                 onClick={handleSwitchToManager}
-                className="text-sm text-slate-300 hover:text-white"
+                className="text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-white px-4 py-1.5 rounded-full transition-colors"
               >
-                Switch to Dashboard
+                Dashboard
               </button>
             </div>
           )}
@@ -625,13 +625,13 @@ function DriverHome({ user, org, onCheckComplete }: DriverHomeProps) {
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
       {/* Tab bar */}
-      <div className="bg-white border-b border-slate-200 flex">
+      <div className="bg-slate-900 border-b border-slate-800 flex">
         <button
           onClick={() => setTab('checks')}
           className={`flex-1 py-3 text-sm font-bold transition-colors ${
             tab === 'checks'
               ? 'text-orange-500 border-b-2 border-orange-500'
-              : 'text-slate-500 hover:text-slate-700'
+              : 'text-slate-400 hover:text-white'
           }`}
         >
           Walk-Around Check
@@ -641,7 +641,7 @@ function DriverHome({ user, org, onCheckComplete }: DriverHomeProps) {
           className={`flex-1 py-3 text-sm font-bold transition-colors relative ${
             tab === 'jobs'
               ? 'text-orange-500 border-b-2 border-orange-500'
-              : 'text-slate-500 hover:text-slate-700'
+              : 'text-slate-400 hover:text-white'
           }`}
         >
           My Jobs

@@ -16,6 +16,8 @@ import {
   Fuel,
   AlertCircle,
   Truck,
+  Lock,
+  RefreshCw,
 } from 'lucide-react';
 import {
   savePendingCheck,
@@ -40,6 +42,7 @@ import type {
   PendingCheck,
   GpsCoordinates,
   FuelLevel,
+  Defect,
 } from '@/types';
 import { FUEL_LEVELS } from '@/types';
 
@@ -74,6 +77,17 @@ interface CompletedCheckSummary {
   driverFitConfirmed: boolean;
   defectRepairNotes: string;
   headOfficeNotes: string;
+}
+
+// Vehicle lock state derived from open defects + requires_recheck flag
+type VehicleLockState = 'locked_open' | 'locked_pending' | 'recheck_required' | 'clear';
+
+function getVehicleLockState(vehicle: Vehicle, openDefects: Defect[]): VehicleLockState {
+  const vd = openDefects.filter((d) => d.vehicle_id === vehicle.id);
+  if (vd.some((d) => d.status === 'raised'))                                   return 'locked_open';
+  if (vd.some((d) => d.status === 'acknowledged' || d.status === 'assigned'))  return 'locked_pending';
+  if (vehicle.requires_recheck)                                                  return 'recheck_required';
+  return 'clear';
 }
 
 interface CheckWizardProps {
@@ -120,6 +134,11 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
   const [defectResolvedToday, setDefectResolvedToday] = useState(false);
   const [checkingForToday, setCheckingForToday] = useState(false);
 
+  // Vehicle lock states
+  const [openDefects, setOpenDefects] = useState<Defect[]>([]);
+  const [lockedVehicleInfo, setLockedVehicleInfo] = useState<{ vehicle: Vehicle; defects: Defect[] } | null>(null);
+  const [isRecheck, setIsRecheck] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const regPhotoInputRef = useRef<HTMLInputElement>(null);
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -134,7 +153,16 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
           getCachedTemplates(),
         ]);
         // Filter vehicles for this org
-        setVehicles(allVehicles.filter((v) => v.org_id === orgId));
+        const orgVehicles = allVehicles.filter((v) => v.org_id === orgId);
+        setVehicles(orgVehicles);
+
+        // Fetch open defects to compute vehicle lock states
+        const { data: defectsData } = await supabase
+          .from('defects')
+          .select('id, vehicle_id, org_id, status, severity, item_label, reported_at')
+          .eq('org_id', orgId)
+          .neq('status', 'resolved');
+        if (defectsData) setOpenDefects(defectsData as Defect[]);
 
         // If no cached templates, fetch directly from Supabase
         let templatesToUse = cachedTemplates;
@@ -581,6 +609,20 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
       await savePendingCheck(pendingCheck);
       await clearDraftCheck();
 
+      // If this was a re-check that passed, clear the vehicle flag
+      if (isRecheck && overallStatus === 'pass' && selectedVehicle) {
+        supabase
+          .from('vehicles')
+          .update({ requires_recheck: false })
+          .eq('id', selectedVehicle.id)
+          .then(() => {
+            setVehicles((prev) =>
+              prev.map((v) => (v.id === selectedVehicle.id ? { ...v, requires_recheck: false } : v))
+            );
+          });
+      }
+      setIsRecheck(false);
+
       setLastCompletedCheck({
         vehicleReg: selectedVehicle.registration,
         vehicleType: selectedVehicle.vehicle_type,
@@ -777,6 +819,68 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
           </button>
         )}
 
+        {/* Locked vehicle info overlay */}
+        {lockedVehicleInfo && (
+          <div
+            className="fixed inset-0 bg-black/70 z-50 flex items-end"
+            onClick={() => setLockedVehicleInfo(null)}
+          >
+            <div
+              className="w-full bg-slate-800 rounded-t-2xl p-5 max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-5 h-5 text-red-400" />
+                  <span className="font-mono font-bold text-white">{lockedVehicleInfo.vehicle.registration}</span>
+                  <span className="text-sm font-semibold text-red-400">Vehicle Locked</span>
+                </div>
+                <button
+                  onClick={() => setLockedVehicleInfo(null)}
+                  className="p-1 text-slate-400 hover:text-white"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {lockedVehicleInfo.defects.length === 0 ? (
+                <p className="text-slate-400 text-sm mb-4">No defect details available.</p>
+              ) : (
+                <div className="space-y-2 mb-4">
+                  {lockedVehicleInfo.defects.map((d) => (
+                    <div key={d.id} className="bg-slate-700 rounded-lg p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-white text-sm font-medium">{d.item_label}</span>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                          d.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
+                          d.severity === 'major'    ? 'bg-amber-500/20 text-amber-400' :
+                                                      'bg-blue-500/20 text-blue-400'
+                        }`}>
+                          {d.severity}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1 capitalize">
+                        {d.status.replace('_', ' ')} · {new Date(d.reported_at).toLocaleDateString('en-GB')}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="text-sm text-slate-400 mb-5">
+                Contact your manager to have these defects cleared before driving this vehicle.
+              </p>
+
+              <button
+                onClick={() => setLockedVehicleInfo(null)}
+                className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl transition-colors"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        )}
+
         {vehicles.length === 0 ? (
           <div className="bg-slate-800 rounded-lg p-6 text-center">
             <p className="text-slate-300">No vehicles available.</p>
@@ -785,30 +889,74 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete }: CheckW
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {vehicles.map((vehicle) => (
-              <button
-                key={vehicle.id}
-                onClick={() => handleSelectVehicle(vehicle)}
-                disabled={checkingForToday}
-                className="w-full bg-slate-800 rounded-lg p-4 text-left hover:bg-slate-700 transition-colors touch-target-lg disabled:opacity-60"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-lg font-mono font-bold text-white">
-                      {vehicle.registration}
+          <>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+              Your Vehicles
+            </p>
+            <div className="space-y-3">
+              {vehicles.map((vehicle) => {
+                const lockState = getVehicleLockState(vehicle, openDefects);
+                const isLocked = lockState === 'locked_open' || lockState === 'locked_pending';
+
+                return (
+                  <button
+                    key={vehicle.id}
+                    onClick={() => {
+                      if (isLocked) {
+                        const vDefects = openDefects.filter((d) => d.vehicle_id === vehicle.id);
+                        setLockedVehicleInfo({ vehicle, defects: vDefects });
+                      } else {
+                        setIsRecheck(lockState === 'recheck_required');
+                        handleSelectVehicle(vehicle);
+                      }
+                    }}
+                    disabled={checkingForToday}
+                    className={`w-full rounded-xl p-4 text-left transition-colors touch-target-lg disabled:opacity-60 ${
+                      lockState === 'locked_open'       ? 'bg-red-900/25 border border-red-500/25 hover:bg-red-900/35' :
+                      lockState === 'locked_pending'    ? 'bg-amber-900/25 border border-amber-500/25 hover:bg-amber-900/35' :
+                      lockState === 'recheck_required'  ? 'bg-blue-900/25 border border-blue-500/25 hover:bg-blue-900/35' :
+                                                          'bg-slate-800 border border-transparent hover:bg-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                          <span className="text-lg font-mono font-bold text-white">
+                            {vehicle.registration}
+                          </span>
+                          {lockState === 'locked_open' && (
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">
+                              <Lock className="w-3 h-3" /> Open
+                            </span>
+                          )}
+                          {lockState === 'locked_pending' && (
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                              <Clock className="w-3 h-3" /> Pending Approval
+                            </span>
+                          )}
+                          {lockState === 'recheck_required' && (
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
+                              <RefreshCw className="w-3 h-3" /> Re-check Required
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-slate-400 truncate">
+                          {[vehicle.make, vehicle.model].filter(Boolean).join(' ')}
+                          {(vehicle.make || vehicle.model) ? ' · ' : ''}
+                          {vehicle.vehicle_type.replace(/_/g, ' ')}
+                        </div>
+                      </div>
+                      {checkingForToday ? (
+                        <Loader2 className="w-5 h-5 text-orange-500 animate-spin shrink-0" />
+                      ) : (
+                        <ChevronRight className={`w-5 h-5 shrink-0 ${isLocked ? 'text-slate-600' : 'text-slate-500'}`} />
+                      )}
                     </div>
-                    <div className="text-sm text-slate-400">
-                      {vehicle.make} {vehicle.model} • {vehicle.vehicle_type.replace(/_/g, ' ')}
-                    </div>
-                  </div>
-                  {checkingForToday && (
-                    <Loader2 className="w-5 h-5 text-orange-500 animate-spin flex-shrink-0" />
-                  )}
-                </div>
-              </button>
-            ))}
-          </div>
+                  </button>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
     );
