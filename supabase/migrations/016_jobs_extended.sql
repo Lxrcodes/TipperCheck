@@ -47,6 +47,11 @@ INSERT INTO material_types (name, code, direction, sort_order) VALUES
 -- Extend jobs table
 -- ============================================================================
 
+-- Drop policies and index that reference driver_id before we remove the column
+DROP POLICY IF EXISTS "drivers_read_own_jobs"         ON jobs;
+DROP POLICY IF EXISTS "drivers_read_own_job_history"  ON job_status_history;
+DROP INDEX IF EXISTS idx_jobs_driver_id;
+
 -- Remove the single-vehicle columns — replaced by job_assignments
 ALTER TABLE jobs
   DROP COLUMN IF EXISTS vehicle_id,
@@ -183,3 +188,12 @@ CREATE POLICY "drivers_read_own_loads" ON loads
 CREATE POLICY "drivers_update_own_loads" ON loads
   FOR UPDATE TO authenticated
   USING  (assignment_id IN (SELECT id FROM job_assignments WHERE driver_id = auth_user_id()));
+
+-- Recreate driver policies for jobs/history — now via job_assignments instead of driver_id column
+CREATE POLICY "drivers_read_own_jobs" ON jobs
+  FOR SELECT TO authenticated
+  USING (id IN (SELECT job_id FROM job_assignments WHERE driver_id = auth_user_id()));
+
+CREATE POLICY "drivers_read_own_job_history" ON job_status_history
+  FOR SELECT TO authenticated
+  USING (job_id IN (SELECT job_id FROM job_assignments WHERE driver_id = auth_user_id()));
