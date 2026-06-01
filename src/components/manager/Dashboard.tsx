@@ -402,7 +402,6 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
           orgId={org.id}
           userId={user.id}
           vehicles={vehicles}
-          drivers={users}
           onClose={() => {
             setShowJobModal(false);
             setEditingJob(null);

@@ -592,24 +592,48 @@ type DriverAssignment = JobAssignment & { jobs: Job };
 function DriverHome({ user, org, onCheckComplete }: DriverHomeProps) {
   const [tab, setTab] = useState<'checks' | 'jobs'>('checks');
   const [assignments, setAssignments] = useState<DriverAssignment[]>([]);
+  const [currentVehicleReg, setCurrentVehicleReg] = useState<string | null>(null);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
 
   const hasJobs = canAccessTier(org, 2);
 
-  useEffect(() => {
-    if (!hasJobs) return;
+  const loadJobs = async () => {
     setJobsLoading(true);
-    supabase
+
+    // Find the vehicle the driver most recently checked
+    const { data: lastCheck } = await supabase
+      .from('check_runs')
+      .select('vehicle_id, vehicle_registration')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (!lastCheck?.vehicle_id) {
+      setAssignments([]);
+      setCurrentVehicleReg(null);
+      setJobsLoading(false);
+      return;
+    }
+
+    setCurrentVehicleReg(lastCheck.vehicle_registration);
+
+    const { data } = await supabase
       .from('job_assignments')
       .select('*, jobs(*)')
-      .eq('driver_id', user.id)
+      .eq('vehicle_id', lastCheck.vehicle_id)
       .not('jobs.status', 'eq', 'cancelled')
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setAssignments((data ?? []).filter((a) => a.jobs) as DriverAssignment[]);
-        setJobsLoading(false);
-      });
+      .order('created_at', { ascending: false });
+
+    setAssignments((data ?? []).filter((a) => a.jobs) as DriverAssignment[]);
+    setJobsLoading(false);
+  };
+
+  useEffect(() => {
+    if (!hasJobs) return;
+    loadJobs();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id, hasJobs]);
 
   // Tier 1 — no jobs feature, just CheckWizard
@@ -651,7 +675,7 @@ function DriverHome({ user, org, onCheckComplete }: DriverHomeProps) {
           Walk-Around Check
         </button>
         <button
-          onClick={() => setTab('jobs')}
+          onClick={() => { setTab('jobs'); if (hasJobs) loadJobs(); }}
           className={`flex-1 py-3 text-sm font-bold transition-colors relative ${
             tab === 'jobs'
               ? 'text-orange-500 border-b-2 border-orange-500'
@@ -677,14 +701,28 @@ function DriverHome({ user, org, onCheckComplete }: DriverHomeProps) {
         />
       ) : (
         <div className="flex-1 p-4 max-w-lg mx-auto w-full">
+          {currentVehicleReg && (
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <Truck className="w-4 h-4 text-slate-400" />
+              <span className="text-xs text-slate-500">
+                Showing jobs for <span className="font-mono font-bold text-slate-700">{currentVehicleReg}</span>
+              </span>
+            </div>
+          )}
           {jobsLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
             </div>
+          ) : !currentVehicleReg ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-10 text-center mt-4">
+              <Truck className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-slate-500 font-medium">No vehicle checked yet</p>
+              <p className="text-slate-400 text-sm mt-1">Complete a walk-around check to see your assigned jobs</p>
+            </div>
           ) : assignments.length === 0 ? (
             <div className="bg-white rounded-xl border border-slate-200 p-10 text-center mt-4">
-              <p className="text-slate-500 font-medium">No jobs assigned to you</p>
-              <p className="text-slate-400 text-sm mt-1">Your manager will assign jobs here</p>
+              <p className="text-slate-500 font-medium">No jobs for this vehicle</p>
+              <p className="text-slate-400 text-sm mt-1">Your manager will assign jobs to {currentVehicleReg}</p>
             </div>
           ) : (
             <div className="space-y-3 mt-2">
