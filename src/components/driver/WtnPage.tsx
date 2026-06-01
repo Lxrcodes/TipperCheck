@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/services/supabaseClient';
-import { Loader2, MapPin, CheckCircle2, Truck } from 'lucide-react';
+import { Loader2, MapPin, CheckCircle2, Truck, Printer, Share2, Check } from 'lucide-react';
 
 interface WtnTicket {
   wtn_reference: string;
@@ -43,6 +43,18 @@ export function WtnPage() {
   const [ticket,  setTicket]  = useState<WtnTicket | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      navigator.share({ title: `WTN ${reference}`, url });
+    } else {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   useEffect(() => {
     if (!reference) { setNotFound(true); setLoading(false); return; }
@@ -74,6 +86,8 @@ export function WtnPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      <style>{`@media print { .no-print { display: none !important; } }`}</style>
+
       {/* Header */}
       <div className="bg-slate-900 px-4 py-5 text-center">
         <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">
@@ -83,6 +97,24 @@ export function WtnPage() {
           {ticket.wtn_reference}
         </p>
         <p className="text-slate-400 text-xs mt-1">{ticket.org_name}</p>
+
+        {/* Actions */}
+        <div className="no-print flex items-center justify-center gap-3 mt-3">
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-medium rounded-lg transition-colors"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            Print / Save PDF
+          </button>
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-medium rounded-lg transition-colors"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Share2 className="w-3.5 h-3.5" />}
+            {copied ? 'Copied!' : 'Share'}
+          </button>
+        </div>
       </div>
 
       <div className="max-w-lg mx-auto p-4 space-y-4">

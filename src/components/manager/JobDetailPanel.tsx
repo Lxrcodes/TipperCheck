@@ -8,6 +8,8 @@ import {
   MapPin,
   Truck,
   RefreshCw,
+  Share2,
+  Check,
 } from 'lucide-react';
 import type { Job, JobAssignment, Load, JobStatus, Vehicle } from '@/types';
 
@@ -74,6 +76,18 @@ export function JobDetailPanel({ job, onBack, onEdit }: JobDetailPanelProps) {
   const [loading, setLoading] = useState(true);
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [currentStatus, setCurrentStatus] = useState<JobStatus>(job.status);
+  const [copiedRef, setCopiedRef] = useState<string | null>(null);
+
+  const shareWtn = async (ref: string) => {
+    const url = `${window.location.origin}/wtn/${ref}`;
+    if (navigator.share) {
+      navigator.share({ title: `WTN ${ref}`, url });
+    } else {
+      await navigator.clipboard.writeText(url);
+      setCopiedRef(ref);
+      setTimeout(() => setCopiedRef(null), 2000);
+    }
+  };
 
   useEffect(() => {
     loadDetail();
@@ -316,16 +330,27 @@ export function JobDetailPanel({ job, onBack, onEdit }: JobDetailPanelProps) {
                           </span>
                         )}
                         {load.wtn_reference && (
-                          <a
-                            href={`/wtn/${load.wtn_reference}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="ml-auto flex items-center gap-1 text-xs text-orange-500 hover:text-orange-600 font-mono font-bold"
-                          >
-                            {load.wtn_reference}
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
+                          <div className="ml-auto flex items-center gap-2">
+                            <a
+                              href={`/wtn/${load.wtn_reference}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-600 font-mono font-bold"
+                            >
+                              {load.wtn_reference}
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); shareWtn(load.wtn_reference!); }}
+                              className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+                              title="Share WTN"
+                            >
+                              {copiedRef === load.wtn_reference
+                                ? <Check className="w-3.5 h-3.5 text-green-500" />
+                                : <Share2 className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
                         )}
                       </div>
                     );

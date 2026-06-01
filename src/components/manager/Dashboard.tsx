@@ -262,7 +262,7 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
           />
           <NavItem
             icon={History}
-            label="History"
+            label="Checks"
             active={activeTab === 'history'}
             onClick={() => handleTabChange('history')}
           />
@@ -1343,6 +1343,9 @@ function JobsView({ org, onCreateJob, onEditJob }: JobsViewProps) {
   const [selectedJob, setSelectedJob] = useState<JobWithMaterial | null>(null);
   const [loadsInProgress, setLoadsInProgress] = useState(0);
   const [loadsCompletedToday, setLoadsCompletedToday] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [materialFilter, setMaterialFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
 
   useEffect(() => {
     loadJobs();
@@ -1398,7 +1401,30 @@ function JobsView({ org, onCreateJob, onEditJob }: JobsViewProps) {
   }
 
   const activeJobs = jobs.filter((j) => j.status === 'active');
-  const filtered = statusFilter === 'all' ? jobs : jobs.filter((j) => j.status === statusFilter);
+
+  // Unique materials present in the job list
+  const materials = Array.from(
+    new Map(
+      jobs.filter((j) => j.material_types).map((j) => [j.material_types!.code, j.material_types!])
+    ).values()
+  );
+
+  const filtered = jobs.filter((j) => {
+    if (statusFilter !== 'all' && j.status !== statusFilter) return false;
+    if (materialFilter !== 'all' && j.material_types?.code !== materialFilter) return false;
+    if (dateFrom && j.start_date && j.start_date < dateFrom) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (
+        !j.title.toLowerCase().includes(q) &&
+        !j.reference.toLowerCase().includes(q) &&
+        !j.job_code.toLowerCase().includes(q) &&
+        !(j.collection_address?.toLowerCase().includes(q)) &&
+        !(j.disposal_address?.toLowerCase().includes(q))
+      ) return false;
+    }
+    return true;
+  });
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
@@ -1435,7 +1461,7 @@ function JobsView({ org, onCreateJob, onEditJob }: JobsViewProps) {
       )}
 
       {/* Status filter */}
-      <div className="flex gap-2 mb-4 flex-wrap">
+      <div className="flex gap-2 mb-3 flex-wrap">
         {(['all', 'pending', 'active', 'completed', 'cancelled'] as const).map((s) => (
           <button
             key={s}
@@ -1449,6 +1475,39 @@ function JobsView({ org, onCreateJob, onEditJob }: JobsViewProps) {
             {s === 'all' ? 'All' : JOB_STATUS_LABEL[s]}
           </button>
         ))}
+      </div>
+
+      {/* Search + material + date filters */}
+      <div className="flex flex-col sm:flex-row gap-2 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search job, reference, location…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
+          />
+        </div>
+        {materials.length > 0 && (
+          <select
+            value={materialFilter}
+            onChange={(e) => setMaterialFilter(e.target.value)}
+            className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
+          >
+            <option value="all">All materials</option>
+            {materials.map((m) => (
+              <option key={m.code} value={m.code}>{m.name}</option>
+            ))}
+          </select>
+        )}
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
+          title="Filter by start date (from)"
+        />
       </div>
 
       {loading ? (
