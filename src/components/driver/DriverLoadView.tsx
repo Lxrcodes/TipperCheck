@@ -267,6 +267,12 @@ export function DriverLoadView({ assignmentId, onClose }: DriverLoadViewProps) {
   const startLoad = async (load: Load) => {
     setSaving(true);
     await supabase.from('loads').update({ status: 'collecting' }).eq('id', load.id);
+
+    // Flip job to active on first load start
+    if (job && job.status === 'pending') {
+      await supabase.from('jobs').update({ status: 'active' }).eq('id', job.id);
+    }
+
     await loadData();
     setActiveLoad(load);
     const s: Screen = 'traveling_collect';
@@ -349,6 +355,18 @@ export function DriverLoadView({ assignmentId, onClose }: DriverLoadViewProps) {
         .from('job_assignments')
         .update({ loads_completed: curr.loads_completed + 1 })
         .eq('id', assignmentId);
+    }
+
+    // Flip job to completed when every load across all assignments is done
+    if (job) {
+      const { count: remaining } = await supabase
+        .from('loads')
+        .select('id', { count: 'exact', head: true })
+        .eq('job_id', job.id)
+        .neq('status', 'completed');
+      if (remaining === 0) {
+        await supabase.from('jobs').update({ status: 'completed' }).eq('id', job.id);
+      }
     }
 
     clearProgress(activeLoad.id);
