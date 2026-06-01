@@ -39,7 +39,6 @@ function AppContent() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [org, setOrg] = useState<Organisation | null>(null);
   const [view, setView] = useState<AppView>('loading');
-  const [preferredView, setPreferredView] = useState<'manager' | 'driver' | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
@@ -261,8 +260,9 @@ function AppContent() {
       // Owner-operators (both roles) default to driver view
       // Managers default to manager view
       // Drivers default to driver view
-      if (preferredView) {
-        setView(preferredView);
+      const savedView = localStorage.getItem('checkatruck_view') as 'manager' | 'driver' | null;
+      if (savedView) {
+        setView(savedView);
       } else if (isDriver(authUserData) && !isManager(authUserData)) {
         setView('driver');
       } else if (isManager(authUserData) && !isDriver(authUserData)) {
@@ -279,11 +279,11 @@ function AppContent() {
   };
 
   const handleLogout = async () => {
+    localStorage.removeItem('checkatruck_view');
     await supabase.auth.signOut();
     setSession(null);
     setAuthUser(null);
     setOrg(null);
-    setPreferredView(null);
     setView('login');
   };
 
@@ -295,12 +295,12 @@ function AppContent() {
   };
 
   const handleSwitchToManager = () => {
-    setPreferredView('manager');
+    localStorage.setItem('checkatruck_view', 'manager');
     setView('manager');
   };
 
   const handleSwitchToDriver = () => {
-    setPreferredView('driver');
+    localStorage.setItem('checkatruck_view', 'driver');
     setView('driver');
   };
 
