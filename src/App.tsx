@@ -11,6 +11,7 @@ import { Onboarding } from '@/components/onboarding/Onboarding';
 import { Dashboard } from '@/components/manager/Dashboard';
 import { CheckWizard } from '@/components/driver/CheckWizard';
 import { DriverLoadView } from '@/components/driver/DriverLoadView';
+import { WtnPage } from '@/components/driver/WtnPage';
 import { useOffline } from '@/hooks/useOffline';
 import { refreshTemplateCache, refreshVehicleCache } from '@/services/syncManager';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
@@ -344,7 +345,8 @@ function AppContent() {
 
   // Check for public routes (no auth required)
   const isInviteRoute = location.pathname.startsWith('/invite/');
-  const isLegalRoute = location.pathname === '/privacy' || location.pathname === '/terms';
+  const isLegalRoute  = location.pathname === '/privacy' || location.pathname === '/terms';
+  const isWtnRoute    = location.pathname.startsWith('/wtn/');
 
   // Show configuration warning if Supabase not set up
   if (!isSupabaseConfigured()) {
@@ -352,12 +354,13 @@ function AppContent() {
   }
 
   // Handle public routes (no auth required)
-  if (isInviteRoute || isLegalRoute) {
+  if (isInviteRoute || isLegalRoute || isWtnRoute) {
     return (
       <Routes>
         <Route path="/invite/:token" element={<AcceptInvite />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
+        <Route path="/wtn/:reference" element={<WtnPage />} />
       </Routes>
     );
   }
