@@ -2356,6 +2356,10 @@ function SettingsView({ org, user, activeVehicleCount, onOrgReload }: SettingsVi
     notify_email: '',
     notify_critical_defect: true,
     notify_job_completed: true,
+    notify_mot_due: true,
+    mot_reminder_days: 30,
+    notify_pmi_due: true,
+    pmi_reminder_days: 14,
   });
 
   useEffect(() => {
@@ -2371,6 +2375,10 @@ function SettingsView({ org, user, activeVehicleCount, onOrgReload }: SettingsVi
             notify_email: data.notify_email ?? '',
             notify_critical_defect: data.notify_critical_defect,
             notify_job_completed: data.notify_job_completed,
+            notify_mot_due: data.notify_mot_due ?? true,
+            mot_reminder_days: data.mot_reminder_days ?? 30,
+            notify_pmi_due: data.notify_pmi_due ?? true,
+            pmi_reminder_days: data.pmi_reminder_days ?? 14,
           });
         }
         setNotifLoading(false);
@@ -2389,6 +2397,10 @@ function SettingsView({ org, user, activeVehicleCount, onOrgReload }: SettingsVi
       notify_email: next.notify_email.trim() || null,
       notify_critical_defect: next.notify_critical_defect,
       notify_job_completed: next.notify_job_completed,
+      notify_mot_due: next.notify_mot_due,
+      mot_reminder_days: next.mot_reminder_days,
+      notify_pmi_due: next.notify_pmi_due,
+      pmi_reminder_days: next.pmi_reminder_days,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });
     setNotifSaving(false);
@@ -2403,6 +2415,10 @@ function SettingsView({ org, user, activeVehicleCount, onOrgReload }: SettingsVi
       notify_email: notifSettings.notify_email.trim() || null,
       notify_critical_defect: notifSettings.notify_critical_defect,
       notify_job_completed: notifSettings.notify_job_completed,
+      notify_mot_due: notifSettings.notify_mot_due,
+      mot_reminder_days: notifSettings.mot_reminder_days,
+      notify_pmi_due: notifSettings.notify_pmi_due,
+      pmi_reminder_days: notifSettings.pmi_reminder_days,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });
     setNotifSaving(false);
@@ -2817,6 +2833,65 @@ function SettingsView({ org, user, activeVehicleCount, onOrgReload }: SettingsVi
                           notifSettings.notify_job_completed ? 'translate-x-6' : 'translate-x-1'
                         }`} />
                       </button>
+                    </div>
+
+                    <div className="flex items-center justify-between py-2.5">
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">MOT due reminder</p>
+                        <p className="text-xs text-slate-500">Scheduled daily — reminds on the chosen day before expiry</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {notifSettings.notify_mot_due && (
+                          <select
+                            value={notifSettings.mot_reminder_days}
+                            onChange={(e) => saveNotifToggle({ mot_reminder_days: Number(e.target.value) })}
+                            className="text-xs border border-slate-200 rounded-lg px-2 py-1 focus:ring-1 focus:ring-orange-500 outline-none bg-white"
+                          >
+                            <option value={7}>7 days</option>
+                            <option value={14}>14 days</option>
+                            <option value={30}>30 days</option>
+                          </select>
+                        )}
+                        <button
+                          onClick={() => saveNotifToggle({ notify_mot_due: !notifSettings.notify_mot_due })}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${
+                            notifSettings.notify_mot_due ? 'bg-orange-500' : 'bg-slate-200'
+                          }`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                            notifSettings.notify_mot_due ? 'translate-x-6' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between py-2.5">
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">PMI due reminder</p>
+                        <p className="text-xs text-slate-500">Scheduled daily — reminds on the chosen day before inspection</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {notifSettings.notify_pmi_due && (
+                          <select
+                            value={notifSettings.pmi_reminder_days}
+                            onChange={(e) => saveNotifToggle({ pmi_reminder_days: Number(e.target.value) })}
+                            className="text-xs border border-slate-200 rounded-lg px-2 py-1 focus:ring-1 focus:ring-orange-500 outline-none bg-white"
+                          >
+                            <option value={7}>7 days</option>
+                            <option value={14}>14 days</option>
+                          </select>
+                        )}
+                        <button
+                          onClick={() => saveNotifToggle({ notify_pmi_due: !notifSettings.notify_pmi_due })}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${
+                            notifSettings.notify_pmi_due ? 'bg-orange-500' : 'bg-slate-200'
+                          }`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                            notifSettings.notify_pmi_due ? 'translate-x-6' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </div>
                     </div>
                   </div>
 
