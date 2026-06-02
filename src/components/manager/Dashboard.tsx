@@ -177,6 +177,12 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
   const checkedToday = new Set(todayChecks.map((c) => c.vehicle_id));
   const uncheckedVehicles = activeVehicles.filter((v) => !checkedToday.has(v.id));
   const criticalDefects = openDefects.filter((d) => d.severity === 'critical');
+  const complianceAlertCount = vehicles.filter((v) => {
+    if (v.status === 'retired') return false;
+    if (v.mot_due_date && getMotDaysUntil(v.mot_due_date) <= 30) return true;
+    if (v.next_pmi_due_date && getMotDaysUntil(v.next_pmi_due_date) <= 14) return true;
+    return false;
+  }).length;
 
   // Close mobile menu when changing tabs
   const handleTabChange = (tab: DashboardTab) => {
@@ -278,7 +284,8 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
             label="Vehicles"
             active={activeTab === 'vehicles'}
             onClick={() => handleTabChange('vehicles')}
-            badge={vehicles.length}
+            badge={complianceAlertCount > 0 ? complianceAlertCount : vehicles.length}
+            badgeColor={complianceAlertCount > 0 ? 'amber' : undefined}
           />
           <NavItem
             icon={Users}
@@ -923,6 +930,47 @@ function VehiclesView({ vehicles, onAdd, onEdit, onRecordMot, onRecordPmi }: Veh
         </div>
       </div>
 
+      {/* Compliance Alerts Banner */}
+      {(() => {
+        const alerts = vehicles
+          .filter((v) => v.status !== 'retired')
+          .flatMap((v) => {
+            const items: { reg: string; label: string; days: number }[] = [];
+            if (v.mot_due_date) {
+              const d = getMotDaysUntil(v.mot_due_date);
+              if (d <= 30) items.push({ reg: v.registration, label: d < 0 ? 'MOT overdue' : `MOT due in ${d} day${d === 1 ? '' : 's'}`, days: d });
+            }
+            if (v.next_pmi_due_date) {
+              const d = getMotDaysUntil(v.next_pmi_due_date);
+              if (d <= 14) items.push({ reg: v.registration, label: d < 0 ? 'PMI overdue' : `PMI due in ${d} day${d === 1 ? '' : 's'}`, days: d });
+            }
+            return items;
+          })
+          .sort((a, b) => a.days - b.days);
+
+        if (alerts.length === 0) return null;
+        const hasOverdue = alerts.some((a) => a.days < 0);
+
+        return (
+          <div className={`rounded-lg border p-4 mb-4 ${hasOverdue ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className={`w-4 h-4 shrink-0 ${hasOverdue ? 'text-red-500' : 'text-amber-500'}`} />
+              <p className={`text-sm font-bold ${hasOverdue ? 'text-red-700' : 'text-amber-700'}`}>
+                {alerts.length} compliance alert{alerts.length > 1 ? 's' : ''}
+              </p>
+            </div>
+            <div className="space-y-1">
+              {alerts.map((a, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className={`font-mono font-bold ${a.days < 0 ? 'text-red-700' : 'text-amber-700'}`}>{a.reg}</span>
+                  <span className={a.days < 0 ? 'text-red-600' : 'text-amber-600'}>{a.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Vehicle Cards */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-lg p-12 text-center">
@@ -980,6 +1028,22 @@ function VehiclesView({ vehicles, onAdd, onEdit, onRecordMot, onRecordPmi }: Veh
                       {vehicleTypeLabel}
                       {(vehicle.make || vehicle.model) && ` • ${vehicle.make} ${vehicle.model}`.trim()}
                     </div>
+                  </div>
+
+                  {/* Compliance badges */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {vehicle.mot_due_date && (() => {
+                      const d = getMotDaysUntil(vehicle.mot_due_date);
+                      if (d < 0) return <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">MOT</span>;
+                      if (d <= 14) return <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">MOT {d}d</span>;
+                      return null;
+                    })()}
+                    {vehicle.next_pmi_due_date && (() => {
+                      const d = getMotDaysUntil(vehicle.next_pmi_due_date);
+                      if (d < 0) return <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">PMI</span>;
+                      if (d <= 7) return <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">PMI {d}d</span>;
+                      return null;
+                    })()}
                   </div>
 
                   {/* Expand indicator */}
