@@ -657,6 +657,19 @@ export function CheckWizard({ driverId, driverEmail, orgId, onComplete, initialV
         defectRepairNotes,
         headOfficeNotes,
       });
+      if (overallStatus === 'do_not_drive') {
+        supabase.functions.invoke('send-notification-email', {
+          body: {
+            type: 'critical_defect',
+            orgId,
+            payload: {
+              vehicleReg: selectedVehicle.registration,
+              driverName: submittedDriverName,
+              checkDate: new Date().toLocaleDateString('en-GB'),
+            },
+          },
+        });
+      }
       setStep('receipt');
       onComplete(overallStatus);
     } catch (err) {

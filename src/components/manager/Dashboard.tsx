@@ -391,7 +391,7 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
             {activeTab === 'defects' && (
               <DefectsView defects={openDefects} onRefresh={loadData} />
             )}
-            {activeTab === 'settings' && <SettingsView org={org} activeVehicleCount={activeVehicles.length} onOrgReload={onOrgReload} />}
+            {activeTab === 'settings' && <SettingsView org={org} user={user} activeVehicleCount={activeVehicles.length} onOrgReload={onOrgReload} />}
           </>
         )}
       </main>
@@ -2256,11 +2256,12 @@ function DefectsView({ defects, onRefresh }: DefectsViewProps) {
 
 interface SettingsViewProps {
   org: Organisation;
+  user: AuthUser;
   activeVehicleCount: number;
   onOrgReload: () => Promise<void>;
 }
 
-function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProps) {
+function SettingsView({ org, user, activeVehicleCount, onOrgReload }: SettingsViewProps) {
   const [billingLoading, setBillingLoading] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
@@ -2281,6 +2282,69 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Notification settings state
+  const [notifLoading, setNotifLoading] = useState(true);
+  const [notifSaving, setNotifSaving] = useState(false);
+  const [notifEmailSaved, setNotifEmailSaved] = useState(false);
+  const [notifSettings, setNotifSettings] = useState({
+    email_enabled: true,
+    notify_email: '',
+    notify_critical_defect: true,
+    notify_job_completed: true,
+  });
+
+  useEffect(() => {
+    supabase
+      .from('notification_settings')
+      .select('*')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setNotifSettings({
+            email_enabled: data.email_enabled,
+            notify_email: data.notify_email ?? '',
+            notify_critical_defect: data.notify_critical_defect,
+            notify_job_completed: data.notify_job_completed,
+          });
+        }
+        setNotifLoading(false);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.id]);
+
+  const saveNotifToggle = async (patch: Partial<typeof notifSettings>) => {
+    const next = { ...notifSettings, ...patch };
+    setNotifSettings(next);
+    setNotifSaving(true);
+    await supabase.from('notification_settings').upsert({
+      user_id: user.id,
+      org_id: org.id,
+      email_enabled: next.email_enabled,
+      notify_email: next.notify_email.trim() || null,
+      notify_critical_defect: next.notify_critical_defect,
+      notify_job_completed: next.notify_job_completed,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+    setNotifSaving(false);
+  };
+
+  const saveNotifEmail = async () => {
+    setNotifSaving(true);
+    await supabase.from('notification_settings').upsert({
+      user_id: user.id,
+      org_id: org.id,
+      email_enabled: notifSettings.email_enabled,
+      notify_email: notifSettings.notify_email.trim() || null,
+      notify_critical_defect: notifSettings.notify_critical_defect,
+      notify_job_completed: notifSettings.notify_job_completed,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+    setNotifSaving(false);
+    setNotifEmailSaved(true);
+    setTimeout(() => setNotifEmailSaved(false), 2000);
+  };
 
   // Calculate billing - all vehicles are billed at £36.40/year
   const PRICE_PER_VEHICLE_YEARLY = 36.40;
@@ -2618,6 +2682,107 @@ function SettingsView({ org, activeVehicleCount, onOrgReload }: SettingsViewProp
               )}
             </button>
           </form>
+        </div>
+
+        {/* Notification Settings */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-lg font-bold text-slate-900">Email Notifications</h2>
+            {notifSaving && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+          </div>
+          <p className="text-sm text-slate-500 mb-4">Choose what you get emailed about and where</p>
+
+          {notifLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="w-5 h-5 animate-spin text-orange-500" />
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {/* Master toggle */}
+              <div className="flex items-center justify-between py-2.5">
+                <div>
+                  <p className="font-medium text-slate-800 text-sm">Enable email notifications</p>
+                  <p className="text-xs text-slate-500">Receive alerts by email</p>
+                </div>
+                <button
+                  onClick={() => saveNotifToggle({ email_enabled: !notifSettings.email_enabled })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${
+                    notifSettings.email_enabled ? 'bg-orange-500' : 'bg-slate-200'
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                    notifSettings.email_enabled ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
+              </div>
+
+              {notifSettings.email_enabled && (
+                <>
+                  <div className="border-t border-slate-100 pt-3 pb-1">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Notify me when</p>
+
+                    <div className="flex items-center justify-between py-2.5">
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">Critical defect raised</p>
+                        <p className="text-xs text-slate-500">Do Not Drive status after a walk-around check</p>
+                      </div>
+                      <button
+                        onClick={() => saveNotifToggle({ notify_critical_defect: !notifSettings.notify_critical_defect })}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${
+                          notifSettings.notify_critical_defect ? 'bg-orange-500' : 'bg-slate-200'
+                        }`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                          notifSettings.notify_critical_defect ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between py-2.5">
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">Job completed</p>
+                        <p className="text-xs text-slate-500">All loads delivered on a job</p>
+                      </div>
+                      <button
+                        onClick={() => saveNotifToggle({ notify_job_completed: !notifSettings.notify_job_completed })}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${
+                          notifSettings.notify_job_completed ? 'bg-orange-500' : 'bg-slate-200'
+                        }`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                          notifSettings.notify_job_completed ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-4">
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                      Notification email
+                    </label>
+                    <p className="text-xs text-slate-500 mb-2">
+                      Leave blank to use your account email ({user.email})
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="email"
+                        value={notifSettings.notify_email}
+                        onChange={(e) => setNotifSettings((s) => ({ ...s, notify_email: e.target.value }))}
+                        placeholder={user.email}
+                        className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                      />
+                      <button
+                        onClick={saveNotifEmail}
+                        className="px-4 py-2 text-sm font-medium bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors flex items-center gap-1.5"
+                      >
+                        {notifEmailSaved ? <Check className="w-4 h-4" /> : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Billing Section */}

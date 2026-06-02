@@ -366,6 +366,17 @@ export function DriverLoadView({ assignmentId, onClose }: DriverLoadViewProps) {
         .neq('status', 'completed');
       if (remaining === 0) {
         await supabase.from('jobs').update({ status: 'completed' }).eq('id', job.id);
+        supabase.functions.invoke('send-notification-email', {
+          body: {
+            type: 'job_completed',
+            orgId: job.org_id,
+            payload: {
+              jobReference: job.reference,
+              jobTitle: job.title,
+              completedAt: new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }),
+            },
+          },
+        });
       }
     }
 

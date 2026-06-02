@@ -13,6 +13,7 @@ import { CheckWizard } from '@/components/driver/CheckWizard';
 import { DriverLoadView } from '@/components/driver/DriverLoadView';
 import { WtnPage } from '@/components/driver/WtnPage';
 import { useOffline } from '@/hooks/useOffline';
+import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications';
 import { refreshTemplateCache, refreshVehicleCache } from '@/services/syncManager';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import type { AuthUser, Organisation, Vehicle, VehicleType, CheckStatus, Job, JobStatus, JobAssignment } from '@/types';
@@ -50,6 +51,8 @@ function AppContent() {
   const offline = useOffline();
   const toast = useToast();
   const location = useLocation();
+
+  useRealtimeNotifications(authUser?.org_id ?? null, authUser ? isManager(authUser) : false);
 
   // Handle billing return URL params
   useEffect(() => {
