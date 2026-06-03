@@ -503,10 +503,10 @@ export function InvoiceModal({
                 <span className="text-xs text-slate-500">{vatEnabled ? 'Enabled' : 'Disabled'}</span>
                 <button
                   onClick={() => setVatEnabled(!vatEnabled)}
-                  className={`relative w-10 h-6 rounded-full transition-colors ${vatEnabled ? 'bg-orange-500' : 'bg-slate-300'}`}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${vatEnabled ? 'bg-orange-500' : 'bg-slate-300'}`}
                 >
                   <span
-                    className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${vatEnabled ? 'translate-x-5' : 'translate-x-1'}`}
+                    className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${vatEnabled ? 'translate-x-6' : 'translate-x-1'}`}
                   />
                 </button>
               </label>
