@@ -76,6 +76,10 @@ export function InvoiceModal({
   const [selectedJobId, setSelectedJobId] = useState<string>(
     prefillJob?.id ?? invoice?.job_id ?? ''
   );
+  // Track which job last auto-filled the items so switching jobs replaces them
+  const [autoFilledJobId, setAutoFilledJobId] = useState<string>(
+    prefillJob?.id ?? ''
+  );
 
   // Form state
   const [clientName, setClientName] = useState(invoice?.client_name ?? '');
@@ -135,24 +139,30 @@ export function InvoiceModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // When user picks a job from the dropdown, populate items if still blank
+  // When user picks a job from the dropdown, populate items if blank or
+  // previously auto-filled from a job (so switching jobs updates the line item)
   const handleJobSelect = (jobId: string) => {
     setSelectedJobId(jobId);
-    if (!jobId) return;
+    if (!jobId) {
+      setAutoFilledJobId('');
+      return;
+    }
     const job = availableJobs.find((j) => j.id === jobId);
-    if (job && isItemsBlank(items)) {
+    if (job && (isItemsBlank(items) || autoFilledJobId)) {
       setItems(itemsFromJob(job));
+      setAutoFilledJobId(jobId);
     }
   };
 
   const { net, vat, gross } = calcTotals(items, vatEnabled);
 
   const updateItem = (id: string, field: keyof DraftItem, value: string) => {
+    setAutoFilledJobId('');
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, [field]: value } : it)));
   };
 
-  const addItem = () => setItems((prev) => [...prev, newDraftItem()]);
-  const removeItem = (id: string) => setItems((prev) => prev.filter((it) => it.id !== id));
+  const addItem = () => { setAutoFilledJobId(''); setItems((prev) => [...prev, newDraftItem()]); };
+  const removeItem = (id: string) => { setAutoFilledJobId(''); setItems((prev) => prev.filter((it) => it.id !== id)); };
 
   const handleSave = async (saveStatus: 'draft' | 'sent') => {
     if (!clientName.trim()) { setError('Client name is required'); return; }
