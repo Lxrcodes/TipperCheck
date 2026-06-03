@@ -10,7 +10,7 @@ import type { Invoice, InvoiceItem, Job } from '@/types';
 type JobWithMaterial = Job & { material_types: { name: string; code: string } | null };
 
 interface DraftItem {
-  id: string;          // temp id for UI key
+  id: string;
   description: string;
   quantity: string;
   unit_price: string;
@@ -43,6 +43,19 @@ function calcTotals(items: DraftItem[], vatEnabled: boolean) {
   return { net, vat, gross: net + vat };
 }
 
+function itemsFromJob(job: JobWithMaterial): DraftItem[] {
+  return [{
+    id: crypto.randomUUID(),
+    description: `${job.title}${job.material_types ? ' – ' + job.material_types.name : ''}`,
+    quantity: String(job.total_loads || 1),
+    unit_price: job.rate_per_load ? String(job.rate_per_load) : '',
+  }];
+}
+
+function isItemsBlank(items: DraftItem[]) {
+  return items.length === 1 && !items[0].description && !items[0].unit_price;
+}
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -57,6 +70,13 @@ export function InvoiceModal({
 }: InvoiceModalProps) {
   const isEdit = !!invoice;
 
+  // Job selector
+  const [availableJobs, setAvailableJobs] = useState<JobWithMaterial[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(true);
+  const [selectedJobId, setSelectedJobId] = useState<string>(
+    prefillJob?.id ?? invoice?.job_id ?? ''
+  );
+
   // Form state
   const [clientName, setClientName] = useState(invoice?.client_name ?? '');
   const [clientAddress, setClientAddress] = useState(invoice?.client_address ?? '');
@@ -70,6 +90,20 @@ export function InvoiceModal({
   const [items, setItems] = useState<DraftItem[]>([newDraftItem()]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Load jobs for this org (all non-cancelled)
+  useEffect(() => {
+    supabase
+      .from('jobs')
+      .select('*, material_types(name, code)')
+      .eq('org_id', orgId)
+      .neq('status', 'cancelled')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setAvailableJobs((data ?? []) as JobWithMaterial[]);
+        setJobsLoading(false);
+      });
+  }, [orgId]);
 
   // Load existing items when editing
   useEffect(() => {
@@ -93,19 +127,23 @@ export function InvoiceModal({
       });
   }, [invoice?.id]);
 
-  // Pre-fill client name from job when creating from a job
+  // Pre-fill items from prefillJob on first render (new invoice from job detail)
   useEffect(() => {
-    if (!isEdit && prefillJob && !clientName) {
-      setClientName('');
-      // Prefill a description item for the job
-      setItems([{
-        id: crypto.randomUUID(),
-        description: `${prefillJob.title}${prefillJob.material_types ? ' – ' + prefillJob.material_types.name : ''}`,
-        quantity: String(prefillJob.total_loads || 1),
-        unit_price: prefillJob.rate_per_load ? String(prefillJob.rate_per_load) : '',
-      }]);
+    if (!isEdit && prefillJob) {
+      setItems(itemsFromJob(prefillJob));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // When user picks a job from the dropdown, populate items if still blank
+  const handleJobSelect = (jobId: string) => {
+    setSelectedJobId(jobId);
+    if (!jobId) return;
+    const job = availableJobs.find((j) => j.id === jobId);
+    if (job && isItemsBlank(items)) {
+      setItems(itemsFromJob(job));
+    }
+  };
 
   const { net, vat, gross } = calcTotals(items, vatEnabled);
 
@@ -124,14 +162,16 @@ export function InvoiceModal({
     setSaving(true);
     setError(null);
 
+    const jobId = selectedJobId || null;
+
     try {
       const totals = calcTotals(validItems, vatEnabled);
 
       if (isEdit && invoice) {
-        // Update invoice
         const { error: invErr } = await supabase
           .from('invoices')
           .update({
+            job_id: jobId,
             client_name: clientName.trim(),
             client_address: clientAddress.trim() || null,
             client_email: clientEmail.trim() || null,
@@ -148,7 +188,6 @@ export function InvoiceModal({
 
         if (invErr) throw invErr;
 
-        // Replace all items
         await supabase.from('invoice_items').delete().eq('invoice_id', invoice.id);
         const newItems = validItems.map((it, i) => ({
           invoice_id: invoice.id,
@@ -163,13 +202,12 @@ export function InvoiceModal({
           if (itemErr) throw itemErr;
         }
       } else {
-        // Create invoice
         const { data: inv, error: invErr } = await supabase
           .from('invoices')
           .insert({
             org_id: orgId,
             created_by: userId,
-            job_id: prefillJob?.id ?? null,
+            job_id: jobId,
             client_name: clientName.trim(),
             client_address: clientAddress.trim() || null,
             client_email: clientEmail.trim() || null,
@@ -215,14 +253,9 @@ export function InvoiceModal({
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">
-              {isEdit ? `Edit ${invoice!.number}` : 'New Invoice'}
-            </h2>
-            {prefillJob && !isEdit && (
-              <p className="text-xs text-slate-500 mt-0.5">From job {prefillJob.reference}</p>
-            )}
-          </div>
+          <h2 className="text-lg font-bold text-slate-900">
+            {isEdit ? `Edit ${invoice!.number}` : 'New Invoice'}
+          </h2>
           <button
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
@@ -233,6 +266,34 @@ export function InvoiceModal({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+
+          {/* Job link */}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              Job (optional)
+            </label>
+            {jobsLoading ? (
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading jobs…
+              </div>
+            ) : (
+              <select
+                value={selectedJobId}
+                onChange={(e) => handleJobSelect(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none bg-white"
+              >
+                <option value="">— Not linked to a job —</option>
+                {availableJobs.map((j) => (
+                  <option key={j.id} value={j.id}>
+                    {j.reference} · {j.title}
+                    {j.material_types ? ` (${j.material_types.name})` : ''}
+                    {j.status !== 'completed' ? ` [${j.status}]` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
 
           {/* Client details */}
           <div>
