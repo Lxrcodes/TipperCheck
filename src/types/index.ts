@@ -292,7 +292,8 @@ export interface Invoice {
   org_id: string;
   created_by: string;
   job_id: string | null;
-  number: string;           // INV-0001
+  material_type_id: string | null;
+  number: string;           // INV-0001 or AAA-INS-0001
   client_name: string;
   client_address: string | null;
   client_email: string | null;

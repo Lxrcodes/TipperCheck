@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/services/supabaseClient';
 import { X, Plus, Trash2, Loader2 } from 'lucide-react';
-import type { Invoice, InvoiceItem, Job } from '@/types';
+import type { Invoice, InvoiceItem, Job, MaterialType } from '@/types';
 
 // ============================================================================
 // Types
@@ -70,15 +70,22 @@ export function InvoiceModal({
 }: InvoiceModalProps) {
   const isEdit = !!invoice;
 
-  // Job selector
+  // Reference data
   const [availableJobs, setAvailableJobs] = useState<JobWithMaterial[]>([]);
-  const [jobsLoading, setJobsLoading] = useState(true);
+  const [materialTypes, setMaterialTypes] = useState<MaterialType[]>([]);
+  const [refLoading, setRefLoading] = useState(true);
+
+  // Job + material selectors
   const [selectedJobId, setSelectedJobId] = useState<string>(
     prefillJob?.id ?? invoice?.job_id ?? ''
   );
-  // Track which job last auto-filled the items so switching jobs replaces them
-  const [autoFilledJobId, setAutoFilledJobId] = useState<string>(
-    prefillJob?.id ?? ''
+  const [selectedMaterialId, setSelectedMaterialId] = useState<string>(
+    prefillJob?.material_type_id ?? invoice?.material_type_id ?? ''
+  );
+  // Track whether current selections were auto-filled from a job (so switching jobs updates them)
+  const [autoFilledJobId, setAutoFilledJobId] = useState<string>(prefillJob?.id ?? '');
+  const [materialAutoFilled, setMaterialAutoFilled] = useState<boolean>(
+    !!(prefillJob?.material_type_id)
   );
 
   // Form state
@@ -95,18 +102,25 @@ export function InvoiceModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load jobs for this org (all non-cancelled)
+  // Load jobs + material types in parallel
   useEffect(() => {
-    supabase
-      .from('jobs')
-      .select('*, material_types(name, code)')
-      .eq('org_id', orgId)
-      .neq('status', 'cancelled')
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setAvailableJobs((data ?? []) as JobWithMaterial[]);
-        setJobsLoading(false);
-      });
+    Promise.all([
+      supabase
+        .from('jobs')
+        .select('*, material_types(name, code)')
+        .eq('org_id', orgId)
+        .neq('status', 'cancelled')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('material_types')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order'),
+    ]).then(([jobsRes, matsRes]) => {
+      setAvailableJobs((jobsRes.data ?? []) as JobWithMaterial[]);
+      setMaterialTypes((matsRes.data ?? []) as MaterialType[]);
+      setRefLoading(false);
+    });
   }, [orgId]);
 
   // Load existing items when editing
@@ -139,8 +153,7 @@ export function InvoiceModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // When user picks a job from the dropdown, populate items if blank or
-  // previously auto-filled from a job (so switching jobs updates the line item)
+  // When user picks a job, update items (if auto-filled or blank) and material (if auto-filled or blank)
   const handleJobSelect = (jobId: string) => {
     setSelectedJobId(jobId);
     if (!jobId) {
@@ -148,10 +161,24 @@ export function InvoiceModal({
       return;
     }
     const job = availableJobs.find((j) => j.id === jobId);
-    if (job && (isItemsBlank(items) || autoFilledJobId)) {
+    if (!job) return;
+
+    // Update line items if still blank or previously auto-filled
+    if (isItemsBlank(items) || autoFilledJobId) {
       setItems(itemsFromJob(job));
       setAutoFilledJobId(jobId);
     }
+
+    // Update material if job has one and material is still auto-filled or blank
+    if (job.material_type_id && (materialAutoFilled || !selectedMaterialId)) {
+      setSelectedMaterialId(job.material_type_id);
+      setMaterialAutoFilled(true);
+    }
+  };
+
+  const handleMaterialSelect = (materialId: string) => {
+    setSelectedMaterialId(materialId);
+    setMaterialAutoFilled(false);
   };
 
   const { net, vat, gross } = calcTotals(items, vatEnabled);
@@ -161,8 +188,15 @@ export function InvoiceModal({
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, [field]: value } : it)));
   };
 
-  const addItem = () => { setAutoFilledJobId(''); setItems((prev) => [...prev, newDraftItem()]); };
-  const removeItem = (id: string) => { setAutoFilledJobId(''); setItems((prev) => prev.filter((it) => it.id !== id)); };
+  const addItem = () => {
+    setAutoFilledJobId('');
+    setItems((prev) => [...prev, newDraftItem()]);
+  };
+
+  const removeItem = (id: string) => {
+    setAutoFilledJobId('');
+    setItems((prev) => prev.filter((it) => it.id !== id));
+  };
 
   const handleSave = async (saveStatus: 'draft' | 'sent') => {
     if (!clientName.trim()) { setError('Client name is required'); return; }
@@ -173,6 +207,7 @@ export function InvoiceModal({
     setError(null);
 
     const jobId = selectedJobId || null;
+    const materialTypeId = selectedMaterialId || null;
 
     try {
       const totals = calcTotals(validItems, vatEnabled);
@@ -182,6 +217,7 @@ export function InvoiceModal({
           .from('invoices')
           .update({
             job_id: jobId,
+            material_type_id: materialTypeId,
             client_name: clientName.trim(),
             client_address: clientAddress.trim() || null,
             client_email: clientEmail.trim() || null,
@@ -218,6 +254,7 @@ export function InvoiceModal({
             org_id: orgId,
             created_by: userId,
             job_id: jobId,
+            material_type_id: materialTypeId,
             client_name: clientName.trim(),
             client_address: clientAddress.trim() || null,
             client_email: clientEmail.trim() || null,
@@ -257,15 +294,31 @@ export function InvoiceModal({
     }
   };
 
+  // Group materials by direction for the select optgroups
+  const importMats = materialTypes.filter((m) => m.direction === 'import' || m.direction === 'both');
+  const exportMats = materialTypes.filter((m) => m.direction === 'export' || m.direction === 'both');
+
+  // Preview what the invoice number will look like
+  const selectedJob = availableJobs.find((j) => j.id === selectedJobId);
+  const selectedMat = materialTypes.find((m) => m.id === selectedMaterialId);
+  const numberPreview = selectedJob && selectedMat
+    ? `${selectedJob.job_code}-${selectedMat.code}-XXXX`
+    : 'INV-XXXX';
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
-          <h2 className="text-lg font-bold text-slate-900">
-            {isEdit ? `Edit ${invoice!.number}` : 'New Invoice'}
-          </h2>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">
+              {isEdit ? `Edit ${invoice!.number}` : 'New Invoice'}
+            </h2>
+            {!isEdit && (
+              <p className="text-xs text-slate-400 mt-0.5 font-mono">{numberPreview}</p>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
@@ -277,32 +330,65 @@ export function InvoiceModal({
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
 
-          {/* Job link */}
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-              Job (optional)
-            </label>
-            {jobsLoading ? (
-              <div className="flex items-center gap-2 text-sm text-slate-400">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Loading jobs…
-              </div>
-            ) : (
-              <select
-                value={selectedJobId}
-                onChange={(e) => handleJobSelect(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none bg-white"
-              >
-                <option value="">— Not linked to a job —</option>
-                {availableJobs.map((j) => (
-                  <option key={j.id} value={j.id}>
-                    {j.reference} · {j.title}
-                    {j.material_types ? ` (${j.material_types.name})` : ''}
-                    {j.status !== 'completed' ? ` [${j.status}]` : ''}
-                  </option>
-                ))}
-              </select>
-            )}
+          {/* Job + Material selectors */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                Job
+              </label>
+              {refLoading ? (
+                <div className="flex items-center gap-2 text-sm text-slate-400 py-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                </div>
+              ) : (
+                <select
+                  value={selectedJobId}
+                  onChange={(e) => handleJobSelect(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none bg-white"
+                >
+                  <option value="">— None —</option>
+                  {availableJobs.map((j) => (
+                    <option key={j.id} value={j.id}>
+                      {j.reference} · {j.title}
+                      {j.status !== 'completed' ? ` [${j.status}]` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                Material
+              </label>
+              {refLoading ? (
+                <div className="flex items-center gap-2 text-sm text-slate-400 py-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                </div>
+              ) : (
+                <select
+                  value={selectedMaterialId}
+                  onChange={(e) => handleMaterialSelect(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none bg-white"
+                >
+                  <option value="">— None —</option>
+                  {importMats.length > 0 && (
+                    <optgroup label="Import (IN)">
+                      {importMats.map((m) => (
+                        <option key={m.id} value={m.id}>{m.code} · {m.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {exportMats.length > 0 && (
+                    <optgroup label="Export (OUT)">
+                      {exportMats.map((m) => (
+                        <option key={m.id} value={m.id}>{m.code} · {m.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+              )}
+            </div>
           </div>
 
           {/* Client details */}
