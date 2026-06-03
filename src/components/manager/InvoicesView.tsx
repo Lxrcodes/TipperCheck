@@ -9,6 +9,7 @@ import {
   Check,
   ChevronRight,
   ChevronDown,
+  Mail,
 } from 'lucide-react';
 import type { Invoice, InvoiceItem, InvoiceStatus, Organisation } from '@/types';
 import { InvoiceModal } from './InvoiceModal';
@@ -55,6 +56,7 @@ export function InvoicesView({ org, userId }: InvoicesViewProps) {
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [copiedNumber, setCopiedNumber] = useState<string | null>(null);
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
+  const [sending, setSending] = useState<string | null>(null);
 
   useEffect(() => { loadInvoices(); }, [org.id]);
 
@@ -100,6 +102,32 @@ export function InvoicesView({ org, userId }: InvoicesViewProps) {
       prev.map((inv) => (inv.id === invoice.id ? { ...inv, status: newStatus } : inv))
     );
     setStatusUpdating(null);
+  };
+
+  const handleSendInvoice = async (inv: Invoice) => {
+    setSending(inv.id);
+    try {
+      const { error } = await supabase.functions.invoke('send-invoice-email', {
+        body: {
+          invoiceNumber: inv.number,
+          clientName: inv.client_name,
+          clientEmail: inv.client_email,
+          orgName: org.name,
+          invoiceUrl: `${window.location.origin}/invoice/${inv.number}`,
+        },
+      });
+      if (error) throw error;
+      if (inv.status === 'draft') {
+        await supabase.from('invoices').update({ status: 'sent' }).eq('id', inv.id);
+        setInvoices((prev) =>
+          prev.map((i) => (i.id === inv.id ? { ...i, status: 'sent' } : i))
+        );
+      }
+    } catch (err) {
+      console.error('Failed to send invoice email:', err);
+    } finally {
+      setSending(null);
+    }
   };
 
   const shareInvoice = async (number: string) => {
@@ -295,21 +323,39 @@ export function InvoicesView({ org, userId }: InvoicesViewProps) {
 
                     {/* Actions */}
                     <div className="flex flex-wrap gap-2 pt-1">
-                      {/* Status transitions */}
-                      {transitions.map((s) => (
+                      {/* Send / Resend email button */}
+                      {inv.client_email && (inv.status === 'draft' || inv.status === 'sent') && (
                         <button
-                          key={s}
-                          onClick={() => handleStatusChange(inv, s)}
-                          disabled={statusUpdating === inv.id}
-                          className="px-3 py-1.5 text-xs font-bold bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
+                          onClick={() => handleSendInvoice(inv)}
+                          disabled={sending === inv.id}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
                         >
-                          {statusUpdating === inv.id ? (
+                          {sending === inv.id ? (
                             <Loader2 className="w-3 h-3 animate-spin" />
                           ) : (
-                            `Mark ${STATUS_LABEL[s]}`
+                            <Mail className="w-3 h-3" />
                           )}
+                          {inv.status === 'draft' ? 'Send Invoice' : 'Resend'}
                         </button>
-                      ))}
+                      )}
+
+                      {/* Status transitions — skip 'sent' for drafts with email (handled above) */}
+                      {transitions
+                        .filter((s) => !(s === 'sent' && inv.client_email))
+                        .map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => handleStatusChange(inv, s)}
+                            disabled={statusUpdating === inv.id}
+                            className="px-3 py-1.5 text-xs font-bold bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
+                          >
+                            {statusUpdating === inv.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              `Mark ${STATUS_LABEL[s]}`
+                            )}
+                          </button>
+                        ))}
 
                       {/* Edit (draft only) */}
                       {inv.status === 'draft' && (
