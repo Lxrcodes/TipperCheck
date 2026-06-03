@@ -259,6 +259,7 @@ export interface JobOrder {
   total_loads: number;
   rate_per_load: number | null;
   status: JobStatus;
+  order_date: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;

@@ -32,6 +32,7 @@ export function JobOrderModal({ order, jobId, jobCode, orgId, userId, onClose, o
 
   const [direction,   setDirection]   = useState<JobDirection | ''>(order?.direction ?? '');
   const [materialId,  setMaterialId]  = useState(order?.material_type_id ?? '');
+  const [orderDate,   setOrderDate]   = useState(order?.order_date ?? '');
   const [ratePerLoad, setRatePerLoad] = useState(order?.rate_per_load?.toString() ?? '');
   const [notes,       setNotes]       = useState(order?.notes ?? '');
 
@@ -112,6 +113,7 @@ export function JobOrderModal({ order, jobId, jobCode, orgId, userId, onClose, o
           .update({
             material_type_id: materialId || null,
             direction:        direction || null,
+            order_date:       orderDate || null,
             total_loads:      totalLoads,
             rate_per_load:    ratePerLoad ? parseFloat(ratePerLoad) : null,
             notes:            notes.trim() || null,
@@ -166,6 +168,7 @@ export function JobOrderModal({ order, jobId, jobCode, orgId, userId, onClose, o
             created_by:       userId,
             material_type_id: materialId || null,
             direction:        direction || null,
+            order_date:       orderDate || null,
             total_loads:      totalLoads,
             rate_per_load:    ratePerLoad ? parseFloat(ratePerLoad) : null,
             notes:            notes.trim() || null,
@@ -271,6 +274,17 @@ export function JobOrderModal({ order, jobId, jobCode, orgId, userId, onClose, o
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Date */}
+          <div>
+            {fieldLabel('Order Date')}
+            <input
+              type="date"
+              value={orderDate}
+              onChange={(e) => setOrderDate(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+            />
           </div>
 
           {/* Rate */}

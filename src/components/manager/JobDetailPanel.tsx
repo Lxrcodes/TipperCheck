@@ -313,6 +313,11 @@ export function JobDetailPanel({ job, userId, onBack, onEdit }: JobDetailPanelPr
                     {!order.material_types && !order.direction && (
                       <span className="text-xs text-slate-400 italic">No material set</span>
                     )}
+                    {order.order_date && (
+                      <span className="text-xs font-semibold text-slate-600 shrink-0">
+                        {new Date(order.order_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                      </span>
+                    )}
                     {order.rate_per_load && (
                       <span className="text-xs text-slate-500 ml-auto shrink-0">
                         £{Number(order.rate_per_load).toFixed(2)}/load
