@@ -246,11 +246,31 @@ export interface Job {
 }
 
 /**
- * JobAssignment - one vehicle+driver assigned to a job.
+ * JobOrder - one material/direction/rate order within a job.
+ * A job can have many orders with different materials.
+ */
+export interface JobOrder {
+  id: string;
+  job_id: string;
+  org_id: string;
+  created_by: string | null;
+  material_type_id: string | null;
+  direction: JobDirection | null;
+  total_loads: number;
+  rate_per_load: number | null;
+  status: JobStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * JobAssignment - one vehicle+driver assigned to a job order.
  */
 export interface JobAssignment {
   id: string;
   job_id: string;
+  job_order_id: string | null;
   vehicle_id: string | null;
   driver_id: string | null;
   loads_assigned: number;

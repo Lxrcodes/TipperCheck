@@ -5,7 +5,7 @@ import {
   CheckCircle2, Camera, ChevronRight, Truck, Pen,
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
-import type { Job, Load, JobAssignment, MaterialType } from '@/types';
+import type { Job, Load, JobAssignment, MaterialType, JobDirection } from '@/types';
 
 interface DriverLoadViewProps {
   assignmentId: string;
@@ -23,7 +23,10 @@ type Screen =
   | 'load_complete';
 
 type FullJob = Job & { material_types: Pick<MaterialType, 'name' | 'code'> | null };
-type FullAssignment = JobAssignment & { vehicles: { registration: string } | null };
+type FullAssignment = JobAssignment & {
+  vehicles: { registration: string } | null;
+  job_orders: { direction: JobDirection | null; material_types: { name: string; code: string } | null } | null;
+};
 
 interface LoadProgress {
   loadId: string;
@@ -196,7 +199,7 @@ export function DriverLoadView({ assignmentId, onClose }: DriverLoadViewProps) {
     const [{ data: assgn }, { data: loadsData }] = await Promise.all([
       supabase
         .from('job_assignments')
-        .select('*, vehicles(registration)')
+        .select('*, vehicles(registration), job_orders(direction, material_types(name, code))')
         .eq('id', assignmentId)
         .single(),
       supabase
@@ -455,15 +458,18 @@ export function DriverLoadView({ assignmentId, onClose }: DriverLoadViewProps) {
           </button>
           <div className="flex-1 min-w-0">
             <p className="text-white font-bold truncate">{job?.title ?? 'Job'}</p>
-            {job?.material_types && (
-              <p className="text-slate-400 text-xs">{job.material_types.name}</p>
+            {(job?.material_types ?? assignment?.job_orders?.material_types) && (
+              <p className="text-slate-400 text-xs">
+                {(job?.material_types ?? assignment?.job_orders?.material_types)!.name}
+              </p>
             )}
           </div>
-          {job?.direction && (
+          {(job?.direction ?? assignment?.job_orders?.direction) && (
             <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-              job.direction === 'import' ? 'bg-blue-900 text-blue-300' : 'bg-amber-900 text-amber-300'
+              (job?.direction ?? assignment?.job_orders?.direction) === 'import'
+                ? 'bg-blue-900 text-blue-300' : 'bg-amber-900 text-amber-300'
             }`}>
-              {job.direction === 'import' ? 'IN' : 'OUT'}
+              {(job?.direction ?? assignment?.job_orders?.direction) === 'import' ? 'IN' : 'OUT'}
             </span>
           )}
         </div>

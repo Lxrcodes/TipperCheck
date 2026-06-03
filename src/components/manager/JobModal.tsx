@@ -1,23 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/services/supabaseClient';
-import { X, Loader2, Truck, ChevronUp, Plus, Minus } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 import { AddressAutocomplete } from '@/components/shared/AddressAutocomplete';
-import type { Job, JobStatus, JobDirection, MaterialType, Vehicle, JobAssignment } from '@/types';
+import type { Job, JobStatus } from '@/types';
 
 interface JobModalProps {
   job: Job | null;
   orgId: string;
   userId: string;
-  vehicles: Vehicle[];
   onClose: () => void;
   onSaved: () => void;
 }
-
-type AssignmentRow = {
-  id?: string;              // set if loaded from DB
-  vehicleId: string;
-  loadsAssigned: number;
-};
 
 const STATUS_OPTIONS: { value: JobStatus; label: string }[] = [
   { value: 'pending',   label: 'Pending' },
@@ -34,95 +27,22 @@ function fieldLabel(text: string, required?: boolean) {
   );
 }
 
-export function JobModal({ job, orgId, userId, vehicles, onClose, onSaved }: JobModalProps) {
+export function JobModal({ job, orgId, userId, onClose, onSaved }: JobModalProps) {
   const isEditing = !!job;
 
-  // Job fields
   const [title,        setTitle]        = useState(job?.title ?? '');
   const [description,  setDescription]  = useState(job?.description ?? '');
-  const [direction,    setDirection]    = useState<JobDirection | ''>(job?.direction ?? '');
-  const [materialId,   setMaterialId]   = useState(job?.material_type_id ?? '');
   const [collectionAddr, setCollectionAddr] = useState(job?.collection_address ?? '');
   const [collectionLat,  setCollectionLat]  = useState<number | null>(job?.collection_lat ?? null);
   const [collectionLng,  setCollectionLng]  = useState<number | null>(job?.collection_lng ?? null);
   const [disposalAddr,   setDisposalAddr]   = useState(job?.disposal_address ?? '');
   const [disposalLat,    setDisposalLat]    = useState<number | null>(job?.disposal_lat ?? null);
   const [disposalLng,    setDisposalLng]    = useState<number | null>(job?.disposal_lng ?? null);
-  const [ratePerLoad,  setRatePerLoad]  = useState(job?.rate_per_load?.toString() ?? '');
   const [startDate,    setStartDate]    = useState(job?.start_date ?? '');
   const [status,       setStatus]       = useState<JobStatus>(job?.status ?? 'pending');
 
-  // Reference data
-  const [materials,    setMaterials]    = useState<MaterialType[]>([]);
-
-  // Assignments
-  const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
-
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState<string | null>(null);
-
-  const activeVehicles = vehicles.filter((v) => v.status === 'active');
-
-  // Load material types once
-  useEffect(() => {
-    supabase
-      .from('material_types')
-      .select('*')
-      .eq('is_active', true)
-      .order('sort_order')
-      .then(({ data }) => {
-        if (data) setMaterials(data as MaterialType[]);
-      });
-  }, []);
-
-  // Load existing assignments when editing
-  useEffect(() => {
-    if (!isEditing || !job) return;
-    supabase
-      .from('job_assignments')
-      .select('*')
-      .eq('job_id', job.id)
-      .then(({ data }) => {
-        if (data) {
-          setAssignments(
-            (data as JobAssignment[]).map((a) => ({
-              id: a.id,
-              vehicleId: a.vehicle_id ?? '',
-              loadsAssigned: a.loads_assigned,
-            }))
-          );
-        }
-      });
-  }, [isEditing, job]);
-
-  // Reset material selection when direction changes and material no longer valid
-  useEffect(() => {
-    if (!materialId || !direction) return;
-    const mat = materials.find((m) => m.id === materialId);
-    if (mat && mat.direction !== direction && mat.direction !== 'both') {
-      setMaterialId('');
-    }
-  }, [direction, materials, materialId]);
-
-  const filteredMaterials = direction
-    ? materials.filter((m) => m.direction === direction || m.direction === 'both')
-    : materials;
-
-  const assignedVehicleIds = new Set(assignments.map((a) => a.vehicleId).filter(Boolean));
-
-  const totalLoads = assignments.reduce((sum, a) => sum + a.loadsAssigned, 0) || 1;
-
-  function addVehicle(vehicleId: string) {
-    setAssignments((prev) => [...prev, { vehicleId, loadsAssigned: 1 }]);
-  }
-
-  function removeAssignment(index: number) {
-    setAssignments((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function updateAssignment(index: number, patch: Partial<AssignmentRow>) {
-    setAssignments((prev) => prev.map((a, i) => (i === index ? { ...a, ...patch } : a)));
-  }
 
   const handleSave = async () => {
     if (!title.trim()) { setError('Title is required.'); return; }
@@ -138,16 +58,12 @@ export function JobModal({ job, orgId, userId, vehicles, onClose, onSaved }: Job
           .update({
             title:              title.trim(),
             description:        description.trim() || null,
-            direction:          direction || null,
-            material_type_id:   materialId || null,
             collection_address: collectionAddr.trim() || null,
             collection_lat:     collectionLat,
             collection_lng:     collectionLng,
             disposal_address:   disposalAddr.trim() || null,
             disposal_lat:       disposalLat,
             disposal_lng:       disposalLng,
-            total_loads:        totalLoads,
-            rate_per_load:      ratePerLoad ? parseFloat(ratePerLoad) : null,
             start_date:         startDate || null,
             status,
           })
@@ -162,95 +78,25 @@ export function JobModal({ job, orgId, userId, vehicles, onClose, onSaved }: Job
             changed_by: userId,
           });
         }
-
-        // Insert new assignments (those without an id)
-        const newAssignments = assignments.filter((a) => !a.id && a.vehicleId);
-        if (newAssignments.length > 0) {
-          const { data: createdAssignments, error: assignError } = await supabase
-            .from('job_assignments')
-            .insert(newAssignments.map((a) => ({
-              job_id:         job.id,
-              vehicle_id:     a.vehicleId || null,
-              loads_assigned: a.loadsAssigned,
-            })))
-            .select('id, loads_assigned');
-          if (assignError) throw assignError;
-
-          // Create pending loads for each new assignment
-          const newLoadRows = (createdAssignments ?? []).flatMap((a) =>
-            Array.from({ length: a.loads_assigned }, (_, i) => ({
-              job_id:        job.id,
-              assignment_id: a.id,
-              org_id:        orgId,
-              load_number:   i + 1,
-            }))
-          );
-          if (newLoadRows.length > 0) {
-            const { error: loadsError } = await supabase.from('loads').insert(newLoadRows);
-            if (loadsError) throw loadsError;
-          }
-        }
-
-        // Update existing assignments' loads_assigned
-        for (const a of assignments.filter((a) => a.id)) {
-          await supabase
-            .from('job_assignments')
-            .update({ loads_assigned: a.loadsAssigned })
-            .eq('id', a.id!);
-        }
       } else {
-        // Insert job — reference + job_code generated by DB trigger
-        const { data: newJob, error: insertError } = await supabase
+        const { error: insertError } = await supabase
           .from('jobs')
           .insert({
             org_id:             orgId,
             created_by:         userId,
             title:              title.trim(),
             description:        description.trim() || null,
-            direction:          direction || null,
-            material_type_id:   materialId || null,
             collection_address: collectionAddr.trim() || null,
             collection_lat:     collectionLat,
             collection_lng:     collectionLng,
             disposal_address:   disposalAddr.trim() || null,
             disposal_lat:       disposalLat,
             disposal_lng:       disposalLng,
-            total_loads:        totalLoads,
-            rate_per_load:      ratePerLoad ? parseFloat(ratePerLoad) : null,
             start_date:         startDate || null,
             status:             'pending',
-          })
-          .select('id')
-          .single();
+          });
 
         if (insertError) throw insertError;
-
-        const validAssignments = assignments.filter((a) => a.vehicleId);
-        if (validAssignments.length > 0) {
-          const { data: createdAssignments, error: assignError } = await supabase
-            .from('job_assignments')
-            .insert(validAssignments.map((a) => ({
-              job_id:         newJob.id,
-              vehicle_id:     a.vehicleId,
-              loads_assigned: a.loadsAssigned,
-            })))
-            .select('id, loads_assigned');
-          if (assignError) throw assignError;
-
-          // Create a pending load row for each load in each assignment
-          const loadRows = (createdAssignments ?? []).flatMap((a) =>
-            Array.from({ length: a.loads_assigned }, (_, i) => ({
-              job_id:        newJob.id,
-              assignment_id: a.id,
-              org_id:        orgId,
-              load_number:   i + 1,
-            }))
-          );
-          if (loadRows.length > 0) {
-            const { error: loadsError } = await supabase.from('loads').insert(loadRows);
-            if (loadsError) throw loadsError;
-          }
-        }
       }
 
       onSaved();
@@ -308,44 +154,6 @@ export function JobModal({ job, orgId, userId, vehicles, onClose, onSaved }: Job
             />
           </div>
 
-          {/* Direction */}
-          <div>
-            {fieldLabel('Direction')}
-            <div className="grid grid-cols-2 gap-2">
-              {(['import', 'export'] as JobDirection[]).map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => setDirection(d)}
-                  className={`py-2 rounded-lg border text-sm font-semibold transition-colors ${
-                    direction === d
-                      ? 'bg-orange-500 border-orange-500 text-white'
-                      : 'border-slate-300 text-slate-600 hover:border-slate-400'
-                  }`}
-                >
-                  {d === 'import' ? 'Import (IN)' : 'Export (OUT)'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Material type */}
-          <div>
-            {fieldLabel('Material')}
-            <select
-              value={materialId}
-              onChange={(e) => setMaterialId(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
-            >
-              <option value="">— Select material —</option>
-              {filteredMaterials.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name} ({m.code})
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Addresses */}
           <AddressAutocomplete
             label="Collection Address"
@@ -371,32 +179,18 @@ export function JobModal({ job, orgId, userId, vehicles, onClose, onSaved }: Job
             placeholder="Where to tip/deliver to…"
           />
 
-          {/* Date + Rate */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              {fieldLabel('Start Date')}
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
-              />
-            </div>
-            <div>
-              {fieldLabel('Rate / Load (£)')}
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={ratePerLoad}
-                onChange={(e) => setRatePerLoad(e.target.value)}
-                placeholder="0.00"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
-              />
-            </div>
+          {/* Start Date */}
+          <div>
+            {fieldLabel('Start Date')}
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+            />
           </div>
 
-          {/* Description */}
+          {/* Notes */}
           <div>
             {fieldLabel('Notes')}
             <textarea
@@ -406,84 +200,6 @@ export function JobModal({ job, orgId, userId, vehicles, onClose, onSaved }: Job
               placeholder="Optional notes"
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none resize-none"
             />
-          </div>
-
-          {/* Vehicle Assignments */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              {fieldLabel('Vehicles')}
-              {totalLoads > 0 && (
-                <span className="text-xs font-semibold text-orange-600">
-                  {totalLoads} load{totalLoads !== 1 ? 's' : ''} total
-                </span>
-              )}
-            </div>
-
-            {/* Assigned vehicles */}
-            <div className="space-y-2 mb-3">
-              {assignments.map((a, i) => {
-                const v = vehicles.find((v) => v.id === a.vehicleId);
-                return (
-                  <div key={i} className="border border-slate-200 rounded-lg p-3 bg-slate-50">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Truck className="w-4 h-4 text-slate-500" />
-                        <span className="font-semibold text-slate-800 text-sm">{v?.registration ?? a.vehicleId}</span>
-                        {v?.make && <span className="text-xs text-slate-500">{v.make}</span>}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeAssignment(i)}
-                        className="text-slate-400 hover:text-red-500 p-0.5"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs text-slate-500">Loads:</p>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => updateAssignment(i, { loadsAssigned: Math.max(1, a.loadsAssigned - 1) })}
-                          className="p-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-100"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <span className="w-8 text-center text-sm font-bold text-slate-800">{a.loadsAssigned}</span>
-                        <button
-                          type="button"
-                          onClick={() => updateAssignment(i, { loadsAssigned: a.loadsAssigned + 1 })}
-                          className="p-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-100"
-                        >
-                          <ChevronUp className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Add vehicle dropdown */}
-            {activeVehicles.filter((v) => !assignedVehicleIds.has(v.id)).length > 0 && (
-              <div className="relative">
-                <select
-                  value=""
-                  onChange={(e) => { if (e.target.value) addVehicle(e.target.value); }}
-                  className="w-full px-3 py-2 border border-dashed border-slate-300 rounded-lg text-sm text-slate-500 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none appearance-none"
-                >
-                  <option value="">+ Add vehicle…</option>
-                  {activeVehicles
-                    .filter((v) => !assignedVehicleIds.has(v.id))
-                    .map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.registration}{v.make ? ` — ${v.make}` : ''}
-                      </option>
-                    ))}
-                </select>
-                <Plus className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-              </div>
-            )}
           </div>
 
           {/* Status (editing only) */}
