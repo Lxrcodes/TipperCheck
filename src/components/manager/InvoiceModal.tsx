@@ -426,6 +426,7 @@ export function InvoiceModal({
               <input
                 type="date"
                 value={issueDate}
+                min={new Date().toISOString().split('T')[0]}
                 onChange={(e) => setIssueDate(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
               />
@@ -435,6 +436,7 @@ export function InvoiceModal({
               <input
                 type="date"
                 value={dueDate}
+                min={issueDate || new Date().toISOString().split('T')[0]}
                 onChange={(e) => setDueDate(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
               />

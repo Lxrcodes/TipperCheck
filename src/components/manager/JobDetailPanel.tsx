@@ -452,6 +452,7 @@ export function JobDetailPanel({ job, userId, onBack, onEdit }: JobDetailPanelPr
           order={editingOrder as JobOrder | null}
           jobId={job.id}
           jobCode={job.job_code}
+          jobStartDate={job.start_date}
           orgId={job.org_id}
           userId={userId}
           onClose={() => setShowOrderModal(false)}

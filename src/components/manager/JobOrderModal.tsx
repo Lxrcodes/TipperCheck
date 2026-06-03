@@ -7,6 +7,7 @@ interface JobOrderModalProps {
   order: JobOrder | null;
   jobId: string;
   jobCode: string;
+  jobStartDate: string | null;
   orgId: string;
   userId: string;
   onClose: () => void;
@@ -27,7 +28,7 @@ function fieldLabel(text: string, required?: boolean) {
   );
 }
 
-export function JobOrderModal({ order, jobId, jobCode, orgId, userId, onClose, onSaved }: JobOrderModalProps) {
+export function JobOrderModal({ order, jobId, jobCode, jobStartDate, orgId, userId, onClose, onSaved }: JobOrderModalProps) {
   const isEditing = !!order;
 
   const [direction,   setDirection]   = useState<JobDirection | ''>(order?.direction ?? '');
@@ -282,6 +283,7 @@ export function JobOrderModal({ order, jobId, jobCode, orgId, userId, onClose, o
             <input
               type="date"
               value={orderDate}
+              min={jobStartDate ?? new Date().toISOString().split('T')[0]}
               onChange={(e) => setOrderDate(e.target.value)}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
             />
