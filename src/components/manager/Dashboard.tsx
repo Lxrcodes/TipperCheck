@@ -1181,7 +1181,28 @@ interface TeamViewProps {
 
 function TeamView({ users, currentUserId, onAdd, onEdit }: TeamViewProps) {
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+  const [search,         setSearch]         = useState('');
+  const [resendingId,    setResendingId]    = useState<string | null>(null);
+  const [resentId,       setResentId]       = useState<string | null>(null);
+
+  const handleResendInvite = async (u: User) => {
+    setResendingId(u.id);
+    try {
+      const newToken = crypto.randomUUID();
+      await supabase.from('users').update({
+        invite_token:   newToken,
+        invite_sent_at: new Date().toISOString(),
+      }).eq('id', u.id);
+      const inviteUrl = `${window.location.origin}/invite/${newToken}`;
+      await supabase.functions.invoke('send-invite-email', {
+        body: { email: u.email, name: u.name, inviteUrl },
+      });
+      setResentId(u.id);
+      setTimeout(() => setResentId(null), 3000);
+    } finally {
+      setResendingId(null);
+    }
+  };
 
   const toggleExpand = (userId: string) => {
     setExpandedUserId(expandedUserId === userId ? null : userId);
@@ -1238,8 +1259,10 @@ function TeamView({ users, currentUserId, onAdd, onEdit }: TeamViewProps) {
       ) : (
         <div className="space-y-3">
           {filtered.map((user) => {
-            const isExpanded = expandedUserId === user.id;
+            const isExpanded    = expandedUserId === user.id;
             const isCurrentUser = user.id === currentUserId;
+            const isPending     = !user.invite_accepted_at;
+            const isDeactivated = !!user.invite_accepted_at && !user.is_active;
 
             return (
               <div
@@ -1253,10 +1276,10 @@ function TeamView({ users, currentUserId, onAdd, onEdit }: TeamViewProps) {
                 >
                   {/* Avatar */}
                   <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    user.is_active ? 'bg-orange-100' : 'bg-slate-100'
+                    isPending ? 'bg-amber-100' : isDeactivated ? 'bg-slate-100' : 'bg-orange-100'
                   }`}>
                     <UserIcon className={`w-6 h-6 ${
-                      user.is_active ? 'text-orange-600' : 'text-slate-400'
+                      isPending ? 'text-amber-500' : isDeactivated ? 'text-slate-400' : 'text-orange-600'
                     }`} />
                   </div>
 
@@ -1269,7 +1292,12 @@ function TeamView({ users, currentUserId, onAdd, onEdit }: TeamViewProps) {
                       {isCurrentUser && (
                         <span className="text-xs text-slate-400">(you)</span>
                       )}
-                      {!user.is_active && (
+                      {isPending && (
+                        <span className="px-1.5 py-0.5 text-xs bg-amber-100 text-amber-700 rounded">
+                          Invite pending
+                        </span>
+                      )}
+                      {isDeactivated && (
                         <span className="px-1.5 py-0.5 text-xs bg-slate-100 text-slate-500 rounded">
                           Inactive
                         </span>
@@ -1329,18 +1357,36 @@ function TeamView({ users, currentUserId, onAdd, onEdit }: TeamViewProps) {
 
                       {/* Status */}
                       <div className="flex items-center gap-3 text-sm">
-                        <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${
-                          user.is_active ? 'text-green-500' : 'text-slate-300'
-                        }`} />
-                        <span className={user.is_active ? 'text-green-600' : 'text-slate-500'}>
-                          {user.is_active ? 'Active' : 'Deactivated'}
+                        {isPending
+                          ? <Clock className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                          : <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${isDeactivated ? 'text-slate-300' : 'text-green-500'}`} />
+                        }
+                        <span className={isPending ? 'text-amber-600' : isDeactivated ? 'text-slate-500' : 'text-green-600'}>
+                          {isPending ? 'Invite pending' : isDeactivated ? 'Deactivated' : 'Active'}
                         </span>
                       </div>
+
+                      {/* Resend invite (pending users) */}
+                      {isPending && (
+                        <button
+                          onClick={() => handleResendInvite(user)}
+                          disabled={resendingId === user.id}
+                          className="w-full py-2 px-4 bg-amber-50 border border-amber-200 text-amber-700 font-medium rounded-lg hover:bg-amber-100 transition-colors text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {resendingId === user.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : resentId === user.id
+                              ? <Check className="w-3.5 h-3.5" />
+                              : <Mail className="w-3.5 h-3.5" />
+                          }
+                          {resentId === user.id ? 'Invite resent!' : 'Resend Invite'}
+                        </button>
+                      )}
 
                       {/* Edit Button */}
                       <button
                         onClick={() => onEdit(user)}
-                        className="w-full mt-2 py-2 px-4 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition-colors text-sm"
+                        className="w-full py-2 px-4 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition-colors text-sm"
                       >
                         Edit Profile
                       </button>

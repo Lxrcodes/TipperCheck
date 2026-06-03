@@ -82,7 +82,7 @@ export function UserModal({ user, orgId, currentUserId, onClose, onSaved }: User
             name: name.trim(),
             phone: phone.trim() || null,
             roles,
-            is_active: true,
+            is_active: false,
             invite_token: inviteToken,
             invite_sent_at: new Date().toISOString(),
           })

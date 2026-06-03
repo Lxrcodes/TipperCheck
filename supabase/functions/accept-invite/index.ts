@@ -65,6 +65,7 @@ serve(async (req) => {
         auth_user_id: authData.user.id,
         invite_accepted_at: new Date().toISOString(),
         invite_token: null,
+        is_active: true,
       })
       .eq('id', pendingUser.id);
 
