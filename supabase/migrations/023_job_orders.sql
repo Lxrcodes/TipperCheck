@@ -23,7 +23,11 @@ CREATE TABLE job_orders (
   updated_at       timestamptz NOT NULL DEFAULT now()
 );
 
--- 2. RLS
+-- 2. Add job_order_id FK to job_assignments BEFORE creating policies that reference it
+ALTER TABLE job_assignments
+  ADD COLUMN IF NOT EXISTS job_order_id uuid REFERENCES job_orders(id) ON DELETE SET NULL;
+
+-- 3. RLS
 ALTER TABLE job_orders ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "managers manage org job orders"
@@ -46,10 +50,6 @@ CREATE POLICY "drivers read assigned job orders"
          AND u.auth_user_id = auth.uid()
     )
   );
-
--- 3. Add job_order_id FK to job_assignments
-ALTER TABLE job_assignments
-  ADD COLUMN IF NOT EXISTS job_order_id uuid REFERENCES job_orders(id) ON DELETE SET NULL;
 
 -- 4. Migrate existing data: one order per job, linking existing assignments
 WITH migrated AS (
