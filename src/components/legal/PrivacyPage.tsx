@@ -22,7 +22,7 @@ export function PrivacyPage() {
 
         <div className="prose prose-invert max-w-none">
           <h1 className="text-3xl font-bold text-white mb-2">Privacy Policy</h1>
-          <p className="text-slate-400 mb-8">Last updated: 21 May 2026</p>
+          <p className="text-slate-400 mb-8">Last updated: 3 June 2026</p>
 
           <div className="space-y-8 text-slate-300">
             <p>
@@ -38,8 +38,10 @@ export function PrivacyPage() {
               <h3 className="font-semibold text-white mb-2">Account and contact information</h3>
               <ul className="list-disc pl-6 space-y-1 mb-4">
                 <li>Name and email address</li>
-                <li>Company name and contact details</li>
-                <li>Billing information (handled by our payment processor — we do not store card details)</li>
+                <li>Company name, address, and contact details</li>
+                <li>Companies House number and VAT registration number (if provided)</li>
+                <li>Bank account name, sort code, and account number (if provided) — stored solely to display payment details on invoices you send to your clients; we do not use this information to initiate any payments</li>
+                <li>Billing information for your CheckaTruck subscription (handled by our payment processor — we do not store card details)</li>
               </ul>
               <h3 className="font-semibold text-white mb-2">Vehicle and operational data</h3>
               <ul className="list-disc pl-6 space-y-1 mb-4">
@@ -70,6 +72,7 @@ export function PrivacyPage() {
                 <li>To manage your account and process payments</li>
                 <li>To generate compliance records and audit trails</li>
                 <li>To send service-related communications such as check reminders and defect alerts</li>
+                <li>To display your company and bank details on invoices you generate and send to your clients</li>
                 <li>To improve and develop the Service</li>
                 <li>To comply with our legal obligations</li>
               </ul>
