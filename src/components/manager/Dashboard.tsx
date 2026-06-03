@@ -2397,6 +2397,39 @@ function SettingsView({ org, user, activeVehicleCount, onOrgReload }: SettingsVi
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [reactivateLoading, setReactivateLoading] = useState(false);
 
+  // Stripe Connect state
+  const [connectLoading, setConnectLoading] = useState(false);
+  const [connectOnboarded, setConnectOnboarded] = useState(org.stripe_connect_onboarded);
+
+  const handleStripeConnect = async () => {
+    setConnectLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-connect-account', {
+        body: { orgId: org.id },
+      });
+      if (error) throw error;
+      if (data.onboarded) {
+        setConnectOnboarded(true);
+      } else if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err) {
+      console.error('Stripe Connect error:', err);
+    } finally {
+      setConnectLoading(false);
+    }
+  };
+
+  // Check Connect status when returning from Stripe onboarding
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('stripe_connect') === 'return' || params.get('stripe_connect') === 'refresh') {
+      handleStripeConnect();
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Org details editing state
   const [orgName,              setOrgName]              = useState(org.name);
   const [orgEmail,             setOrgEmail]             = useState(org.contact_email ?? '');
@@ -3094,6 +3127,40 @@ function SettingsView({ org, user, activeVehicleCount, onOrgReload }: SettingsVi
                 </>
               )}
             </div>
+          )}
+        </div>
+
+        {/* Accept Payments via Stripe Connect */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h2 className="text-lg font-bold text-slate-900 mb-1">Accept Invoice Payments</h2>
+          <p className="text-sm text-slate-500 mb-4">
+            Connect a Stripe account to let your clients pay invoices online by card. Money goes directly to your bank account.
+          </p>
+          {connectOnboarded ? (
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+                <Check className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-semibold text-green-700">Stripe connected</span>
+              </div>
+              <button
+                onClick={handleStripeConnect}
+                disabled={connectLoading}
+                className="text-sm text-slate-500 hover:text-slate-700 underline"
+              >
+                Refresh status
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleStripeConnect}
+              disabled={connectLoading}
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#635bff] text-white font-bold rounded-lg hover:bg-[#4f46e5] disabled:opacity-50 transition-colors text-sm"
+            >
+              {connectLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {org.stripe_connect_account_id && !connectOnboarded
+                ? 'Continue Stripe setup'
+                : 'Connect with Stripe'}
+            </button>
           )}
         </div>
 

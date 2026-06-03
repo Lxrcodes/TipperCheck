@@ -66,6 +66,8 @@ export interface Organisation {
   bank_account_number: string | null;
   bank_sort_code: string | null;
   stripe_customer_id: string | null;
+  stripe_connect_account_id: string | null;
+  stripe_connect_onboarded: boolean;
   subscription_id: string | null;
   subscription_status: SubscriptionStatus | null;
   subscription_tier: number;
@@ -332,6 +334,7 @@ export interface Invoice {
   total_gross: number;
   notes: string | null;
   status: InvoiceStatus;
+  stripe_checkout_session_id: string | null;
   created_at: string;
   updated_at: string;
 }

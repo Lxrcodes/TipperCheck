@@ -30,6 +30,17 @@ serve(async (req) => {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
 
+        // Invoice payment (one-time, has invoice_id in metadata)
+        if (session.metadata?.invoice_id) {
+          await supabase
+            .from('invoices')
+            .update({ status: 'paid' })
+            .eq('id', session.metadata.invoice_id);
+          console.log(`Invoice ${session.metadata.invoice_number} marked paid via Stripe`);
+          break;
+        }
+
+        // Subscription checkout
         if (session.subscription) {
           const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
           const orgId = subscription.metadata?.org_id;

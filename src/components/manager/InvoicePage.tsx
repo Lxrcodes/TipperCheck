@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/services/supabaseClient';
-import { Loader2, Printer, Share2, Check } from 'lucide-react';
+import { Loader2, Printer, Share2, Check, CreditCard } from 'lucide-react';
 import type { Invoice, InvoiceItem } from '@/types';
 
 interface PublicInvoiceData {
@@ -16,14 +16,18 @@ interface PublicInvoiceData {
   org_bank_name: string | null;
   org_bank_account_number: string | null;
   org_bank_sort_code: string | null;
+  org_accepts_payments: boolean;
 }
 
 export function InvoicePage() {
   const { number } = useParams<{ number: string }>();
+  const [searchParams] = useSearchParams();
   const [data, setData] = useState<PublicInvoiceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [payLoading, setPayLoading] = useState(false);
+  const justPaid = searchParams.get('paid') === '1';
 
   const handleShare = async () => {
     const url = window.location.href;
@@ -33,6 +37,22 @@ export function InvoicePage() {
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handlePay = async () => {
+    if (!number) return;
+    setPayLoading(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('create-invoice-checkout', {
+        body: { invoiceNumber: number.toUpperCase() },
+      });
+      if (error) throw error;
+      if (result?.url) window.location.href = result.url;
+    } catch (err) {
+      console.error('Payment error:', err);
+    } finally {
+      setPayLoading(false);
     }
   };
 
@@ -72,6 +92,17 @@ export function InvoicePage() {
     <div className="min-h-screen bg-slate-50 py-8 px-4">
       <div className="max-w-2xl mx-auto">
 
+        {/* Paid confirmation banner */}
+        {justPaid && (
+          <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl mb-4 print:hidden">
+            <Check className="w-5 h-5 text-green-600 shrink-0" />
+            <div>
+              <p className="font-bold text-green-800">Payment received</p>
+              <p className="text-sm text-green-700">Thank you — your payment has been processed successfully.</p>
+            </div>
+          </div>
+        )}
+
         {/* Action bar */}
         <div className="flex items-center justify-between mb-6 print:hidden">
           <div className="flex items-center gap-2">
@@ -85,6 +116,16 @@ export function InvoicePage() {
             </span>
           </div>
           <div className="flex gap-2">
+            {data.org_accepts_payments && invoice.status === 'sent' && (
+              <button
+                onClick={handlePay}
+                disabled={payLoading}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 transition-colors"
+              >
+                {payLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                Pay Now
+              </button>
+            )}
             <button
               onClick={handleShare}
               className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-slate-200 bg-white rounded-lg hover:bg-slate-50 transition-colors"
@@ -94,7 +135,7 @@ export function InvoicePage() {
             </button>
             <button
               onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-slate-200 bg-white rounded-lg hover:bg-slate-50 transition-colors"
             >
               <Printer className="w-4 h-4" />
               Print / PDF
