@@ -231,8 +231,10 @@ export function InvoicesView({ org, userId }: InvoicesViewProps) {
             const items = itemsByInvoice[inv.id] ?? [];
             const transitions = STATUS_TRANSITIONS[inv.status] ?? [];
 
+            const isOverdue = inv.status === 'sent' && inv.due_date != null && inv.due_date < new Date().toISOString().split('T')[0];
+
             return (
-              <div key={inv.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div key={inv.id} className={`bg-white rounded-xl border overflow-hidden ${isOverdue ? 'border-red-300' : 'border-slate-200'}`}>
                 {/* Row header */}
                 <button
                   onClick={() => handleExpand(inv.id)}
@@ -245,6 +247,11 @@ export function InvoicesView({ org, userId }: InvoicesViewProps) {
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${STATUS_COLOR[inv.status]}`}>
                         {STATUS_LABEL[inv.status]}
                       </span>
+                      {isOverdue && (
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                          Overdue
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-slate-600 truncate mt-0.5">{inv.client_name}</p>
                   </div>

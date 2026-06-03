@@ -2397,6 +2397,49 @@ function SettingsView({ org, user, activeVehicleCount, onOrgReload }: SettingsVi
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [reactivateLoading, setReactivateLoading] = useState(false);
 
+  // Org details editing state
+  const [orgName,              setOrgName]              = useState(org.name);
+  const [orgEmail,             setOrgEmail]             = useState(org.contact_email ?? '');
+  const [orgPhone,             setOrgPhone]             = useState(org.contact_phone ?? '');
+  const [orgAddress,           setOrgAddress]           = useState(org.address ?? '');
+  const [orgCompanyNumber,     setOrgCompanyNumber]     = useState(org.company_number ?? '');
+  const [orgVatNumber,         setOrgVatNumber]         = useState(org.vat_number ?? '');
+  const [orgBankName,          setOrgBankName]          = useState(org.bank_name ?? '');
+  const [orgBankAccount,       setOrgBankAccount]       = useState(org.bank_account_number ?? '');
+  const [orgBankSortCode,      setOrgBankSortCode]      = useState(org.bank_sort_code ?? '');
+  const [orgSaving,            setOrgSaving]            = useState(false);
+  const [orgSaved,             setOrgSaved]             = useState(false);
+  const [orgError,             setOrgError]             = useState<string | null>(null);
+
+  const handleSaveOrg = async () => {
+    if (!orgName.trim()) { setOrgError('Company name is required'); return; }
+    setOrgSaving(true);
+    setOrgError(null);
+    const { error } = await supabase
+      .from('organisations')
+      .update({
+        name:                 orgName.trim(),
+        contact_email:        orgEmail.trim() || null,
+        contact_phone:        orgPhone.trim() || null,
+        address:              orgAddress.trim() || null,
+        company_number:       orgCompanyNumber.trim() || null,
+        vat_number:           orgVatNumber.trim() || null,
+        bank_name:            orgBankName.trim() || null,
+        bank_account_number:  orgBankAccount.trim() || null,
+        bank_sort_code:       orgBankSortCode.trim() || null,
+        updated_at:           new Date().toISOString(),
+      })
+      .eq('id', org.id);
+    if (error) {
+      setOrgError(error.message);
+    } else {
+      setOrgSaved(true);
+      setTimeout(() => setOrgSaved(false), 2000);
+      await onOrgReload();
+    }
+    setOrgSaving(false);
+  };
+
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -2721,16 +2764,81 @@ function SettingsView({ org, user, activeVehicleCount, onOrgReload }: SettingsVi
 
         {/* Organisation Info */}
         <div className="bg-white rounded-lg shadow-sm p-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">Organisation</h2>
-          <div className="space-y-3">
-            <div>
-              <div className="text-xs font-bold text-slate-500 uppercase">Name</div>
-              <div className="text-slate-900">{org.name}</div>
+          <h2 className="text-lg font-bold text-slate-900 mb-4">Company Details</h2>
+          <div className="space-y-4">
+            {orgError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{orgError}</div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Company Name *</label>
+                <input type="text" value={orgName} onChange={(e) => setOrgName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Contact Email</label>
+                <input type="email" value={orgEmail} onChange={(e) => setOrgEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Phone</label>
+                <input type="tel" value={orgPhone} onChange={(e) => setOrgPhone(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Companies House No.</label>
+                <input type="text" value={orgCompanyNumber} onChange={(e) => setOrgCompanyNumber(e.target.value)}
+                  placeholder="e.g. 12345678"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">VAT Number</label>
+                <input type="text" value={orgVatNumber} onChange={(e) => setOrgVatNumber(e.target.value)}
+                  placeholder="e.g. GB123456789"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
+              </div>
             </div>
+
             <div>
-              <div className="text-xs font-bold text-slate-500 uppercase">Contact Email</div>
-              <div className="text-slate-900">{org.contact_email || '-'}</div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Company Address</label>
+              <textarea value={orgAddress} onChange={(e) => setOrgAddress(e.target.value)}
+                rows={3} placeholder="Full address (appears on invoices)"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none resize-none" />
             </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Bank Details (for invoice payment)</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Bank Name</label>
+                  <input type="text" value={orgBankName} onChange={(e) => setOrgBankName(e.target.value)}
+                    placeholder="e.g. Barclays"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Sort Code</label>
+                  <input type="text" value={orgBankSortCode} onChange={(e) => setOrgBankSortCode(e.target.value)}
+                    placeholder="00-00-00"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Account Number</label>
+                  <input type="text" value={orgBankAccount} onChange={(e) => setOrgBankAccount(e.target.value)}
+                    placeholder="12345678"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleSaveOrg}
+              disabled={orgSaving}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 transition-colors text-sm"
+            >
+              {orgSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : orgSaved ? <Check className="w-4 h-4" /> : null}
+              {orgSaved ? 'Saved' : 'Save Changes'}
+            </button>
           </div>
         </div>
 

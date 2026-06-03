@@ -59,6 +59,12 @@ export interface Organisation {
   contact_email: string | null;
   contact_phone: string | null;
   o_licence_number: string | null;
+  address: string | null;
+  company_number: string | null;
+  vat_number: string | null;
+  bank_name: string | null;
+  bank_account_number: string | null;
+  bank_sort_code: string | null;
   stripe_customer_id: string | null;
   subscription_id: string | null;
   subscription_status: SubscriptionStatus | null;

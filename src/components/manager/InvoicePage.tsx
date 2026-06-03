@@ -8,6 +8,14 @@ interface PublicInvoiceData {
   invoice: Invoice;
   items: InvoiceItem[];
   org_name: string;
+  org_address: string | null;
+  org_contact_email: string | null;
+  org_contact_phone: string | null;
+  org_company_number: string | null;
+  org_vat_number: string | null;
+  org_bank_name: string | null;
+  org_bank_account_number: string | null;
+  org_bank_sort_code: string | null;
 }
 
 export function InvoicePage() {
@@ -101,6 +109,21 @@ export function InvoicePage() {
           <div className="flex items-start justify-between mb-8">
             <div>
               <h1 className="text-2xl font-bold text-slate-900">{org_name}</h1>
+              {data.org_address && (
+                <p className="text-sm text-slate-500 mt-1 whitespace-pre-line">{data.org_address}</p>
+              )}
+              {data.org_contact_phone && (
+                <p className="text-sm text-slate-500 mt-0.5">{data.org_contact_phone}</p>
+              )}
+              {data.org_contact_email && (
+                <p className="text-sm text-slate-500 mt-0.5">{data.org_contact_email}</p>
+              )}
+              {data.org_vat_number && (
+                <p className="text-xs text-slate-400 mt-1">VAT No: {data.org_vat_number}</p>
+              )}
+              {data.org_company_number && (
+                <p className="text-xs text-slate-400">Co. No: {data.org_company_number}</p>
+              )}
             </div>
             <div className="text-right">
               <p className="text-3xl font-bold text-orange-500">INVOICE</p>
@@ -187,6 +210,18 @@ export function InvoicePage() {
             <div className="border-t border-slate-100 pt-4">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Notes</p>
               <p className="text-sm text-slate-600 whitespace-pre-line">{invoice.notes}</p>
+            </div>
+          )}
+
+          {/* Bank details */}
+          {(data.org_bank_name || data.org_bank_sort_code || data.org_bank_account_number) && (
+            <div className="border-t border-slate-100 pt-4 mt-6">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Payment Details</p>
+              <div className="text-sm text-slate-600 space-y-0.5">
+                {data.org_bank_name && <p>Bank: {data.org_bank_name}</p>}
+                {data.org_bank_sort_code && <p>Sort Code: {data.org_bank_sort_code}</p>}
+                {data.org_bank_account_number && <p>Account: {data.org_bank_account_number}</p>}
+              </div>
             </div>
           )}
 
