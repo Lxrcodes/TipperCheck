@@ -12,6 +12,7 @@ import { Dashboard } from '@/components/manager/Dashboard';
 import { CheckWizard } from '@/components/driver/CheckWizard';
 import { DriverLoadView } from '@/components/driver/DriverLoadView';
 import { WtnPage } from '@/components/driver/WtnPage';
+import { InvoicePage } from '@/components/manager/InvoicePage';
 import { useOffline } from '@/hooks/useOffline';
 import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications';
 import { refreshTemplateCache, refreshVehicleCache } from '@/services/syncManager';
@@ -347,9 +348,10 @@ function AppContent() {
     : null;
 
   // Check for public routes (no auth required)
-  const isInviteRoute = location.pathname.startsWith('/invite/');
-  const isLegalRoute  = location.pathname === '/privacy' || location.pathname === '/terms';
-  const isWtnRoute    = location.pathname.startsWith('/wtn/');
+  const isInviteRoute   = location.pathname.startsWith('/invite/');
+  const isLegalRoute    = location.pathname === '/privacy' || location.pathname === '/terms';
+  const isWtnRoute      = location.pathname.startsWith('/wtn/');
+  const isInvoiceRoute  = location.pathname.startsWith('/invoice/');
 
   // Show configuration warning if Supabase not set up
   if (!isSupabaseConfigured()) {
@@ -357,13 +359,14 @@ function AppContent() {
   }
 
   // Handle public routes (no auth required)
-  if (isInviteRoute || isLegalRoute || isWtnRoute) {
+  if (isInviteRoute || isLegalRoute || isWtnRoute || isInvoiceRoute) {
     return (
       <Routes>
         <Route path="/invite/:token" element={<AcceptInvite />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/wtn/:reference" element={<WtnPage />} />
+        <Route path="/invoice/:number" element={<InvoicePage />} />
       </Routes>
     );
   }

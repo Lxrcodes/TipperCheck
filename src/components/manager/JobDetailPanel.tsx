@@ -10,8 +10,10 @@ import {
   RefreshCw,
   Share2,
   Check,
+  Receipt,
 } from 'lucide-react';
 import type { Job, JobAssignment, Load, JobStatus, Vehicle } from '@/types';
+import { InvoiceModal } from './InvoiceModal';
 
 // ============================================================================
 // Types
@@ -66,17 +68,19 @@ const IN_PROGRESS: LoadStatus[] = ['collecting', 'collected', 'delivering'];
 
 interface JobDetailPanelProps {
   job: JobWithMaterial;
+  userId: string;
   onBack: () => void;
   onEdit: () => void;
 }
 
-export function JobDetailPanel({ job, onBack, onEdit }: JobDetailPanelProps) {
+export function JobDetailPanel({ job, userId, onBack, onEdit }: JobDetailPanelProps) {
   const [assignments, setAssignments] = useState<AssignmentWithVehicle[]>([]);
   const [loadsByAssignment, setLoadsByAssignment] = useState<Record<string, Load[]>>({});
   const [loading, setLoading] = useState(true);
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [currentStatus, setCurrentStatus] = useState<JobStatus>(job.status);
   const [copiedRef, setCopiedRef] = useState<string | null>(null);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
 
   const shareWtn = async (ref: string) => {
     const url = `${window.location.origin}/wtn/${ref}`;
@@ -174,6 +178,15 @@ export function JobDetailPanel({ job, onBack, onEdit }: JobDetailPanelProps) {
           <Edit2 className="w-3.5 h-3.5" />
           Edit
         </button>
+        {currentStatus === 'completed' && (
+          <button
+            onClick={() => setShowInvoiceModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors shrink-0"
+          >
+            <Receipt className="w-3.5 h-3.5" />
+            Invoice
+          </button>
+        )}
       </div>
 
       {/* Job info card */}
@@ -360,6 +373,17 @@ export function JobDetailPanel({ job, onBack, onEdit }: JobDetailPanelProps) {
             );
           })}
         </div>
+      )}
+
+      {showInvoiceModal && (
+        <InvoiceModal
+          invoice={null}
+          orgId={job.org_id}
+          userId={userId}
+          prefillJob={job}
+          onClose={() => setShowInvoiceModal(false)}
+          onSaved={() => setShowInvoiceModal(false)}
+        />
       )}
     </div>
   );

@@ -31,6 +31,7 @@ import {
   Wrench,
   ArrowUpDown,
   Briefcase,
+  Receipt,
 } from 'lucide-react';
 import type {
   AuthUser,
@@ -60,8 +61,9 @@ import { MotRecordModal } from './MotRecordModal';
 import { PmiRecordModal } from './PmiRecordModal';
 import { JobModal } from './JobModal';
 import { JobDetailPanel } from './JobDetailPanel';
+import { InvoicesView } from './InvoicesView';
 
-type DashboardTab = 'today' | 'history' | 'jobs' | 'vehicles' | 'team' | 'defects' | 'settings';
+type DashboardTab = 'today' | 'history' | 'jobs' | 'vehicles' | 'team' | 'defects' | 'invoices' | 'settings';
 
 interface DashboardProps {
   user: AuthUser;
@@ -303,6 +305,13 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
             badgeColor={criticalDefects.length > 0 ? 'red' : 'amber'}
           />
           <NavItem
+            icon={Receipt}
+            label="Invoices"
+            active={activeTab === 'invoices'}
+            onClick={() => handleTabChange('invoices')}
+            locked={!canAccessTier(org, 3)}
+          />
+          <NavItem
             icon={Settings}
             label="Settings"
             active={activeTab === 'settings'}
@@ -356,6 +365,7 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
             {activeTab === 'jobs' && (
               <JobsView
                 org={org}
+                userId={user.id}
                 onCreateJob={() => {
                   setEditingJob(null);
                   setShowJobModal(true);
@@ -397,6 +407,14 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
             )}
             {activeTab === 'defects' && (
               <DefectsView defects={openDefects} onRefresh={loadData} />
+            )}
+            {activeTab === 'invoices' && (
+              canAccessTier(org, 3)
+                ? <InvoicesView org={org} userId={user.id} />
+                : <UpgradePromptInline
+                    tierName="Control"
+                    features={['Create and send professional invoices', 'Link invoices to jobs', 'Track draft, sent and paid status', 'Shareable public invoice links']}
+                  />
             )}
             {activeTab === 'settings' && <SettingsView org={org} user={user} activeVehicleCount={activeVehicles.length} onOrgReload={onOrgReload} />}
           </>
@@ -1394,13 +1412,14 @@ const JOB_STATUS_COLOR: Record<JobStatus, string> = {
 
 interface JobsViewProps {
   org: Organisation;
+  userId: string;
   onCreateJob: () => void;
   onEditJob: (job: Job) => void;
 }
 
 type JobWithMaterial = Job & { material_types: { name: string; code: string } | null };
 
-function JobsView({ org, onCreateJob, onEditJob }: JobsViewProps) {
+function JobsView({ org, userId, onCreateJob, onEditJob }: JobsViewProps) {
   const [jobs, setJobs] = useState<JobWithMaterial[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<JobStatus | 'all'>('all');
@@ -1458,6 +1477,7 @@ function JobsView({ org, onCreateJob, onEditJob }: JobsViewProps) {
     return (
       <JobDetailPanel
         job={selectedJob}
+        userId={userId}
         onBack={() => { setSelectedJob(null); loadJobs(); }}
         onEdit={() => onEditJob(selectedJob)}
       />
