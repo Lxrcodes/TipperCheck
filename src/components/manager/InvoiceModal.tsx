@@ -9,7 +9,7 @@ import type { Invoice, InvoiceItem, Job, MaterialType } from '@/types';
 
 type JobWithMaterial = Job & { material_types: { name: string; code: string } | null };
 
-interface DraftItem {
+export interface DraftItem {
   id: string;
   description: string;
   quantity: string;
@@ -21,6 +21,7 @@ interface InvoiceModalProps {
   orgId: string;
   userId: string;
   prefillJob?: JobWithMaterial | null;
+  prefillItems?: DraftItem[];
   onClose: () => void;
   onSaved: () => void;
 }
@@ -65,6 +66,7 @@ export function InvoiceModal({
   orgId,
   userId,
   prefillJob,
+  prefillItems,
   onClose,
   onSaved,
 }: InvoiceModalProps) {
@@ -98,7 +100,9 @@ export function InvoiceModal({
   const [dueDate, setDueDate] = useState(invoice?.due_date ?? '');
   const [vatEnabled, setVatEnabled] = useState(invoice?.vat_enabled ?? true);
   const [notes, setNotes] = useState(invoice?.notes ?? '');
-  const [items, setItems] = useState<DraftItem[]>([newDraftItem()]);
+  const [items, setItems] = useState<DraftItem[]>(
+    prefillItems && prefillItems.length > 0 ? prefillItems : [newDraftItem()]
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -145,9 +149,9 @@ export function InvoiceModal({
       });
   }, [invoice?.id]);
 
-  // Pre-fill items from prefillJob on first render (new invoice from job detail)
+  // Pre-fill items from prefillJob on first render — only if no explicit prefillItems provided
   useEffect(() => {
-    if (!isEdit && prefillJob) {
+    if (!isEdit && prefillJob && !prefillItems) {
       setItems(itemsFromJob(prefillJob));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -15,7 +15,7 @@ import {
   Package,
 } from 'lucide-react';
 import type { Job, JobAssignment, Load, JobStatus, Vehicle, JobOrder } from '@/types';
-import { InvoiceModal } from './InvoiceModal';
+import { InvoiceModal, type DraftItem } from './InvoiceModal';
 import { JobOrderModal } from './JobOrderModal';
 
 // ============================================================================
@@ -79,6 +79,35 @@ interface JobDetailPanelProps {
   userId: string;
   onBack: () => void;
   onEdit: () => void;
+}
+
+function buildInvoiceItems(orders: OrderRow[], loadsByAssignment: Record<string, Load[]>): DraftItem[] {
+  const items: DraftItem[] = [];
+
+  for (const order of orders) {
+    const completedCount = order.job_assignments
+      .flatMap((a) => loadsByAssignment[a.id] ?? [])
+      .filter((l) => l.status === 'completed').length;
+
+    if (completedCount === 0) continue;
+
+    const parts: string[] = [];
+    if (order.material_types) parts.push(order.material_types.name);
+    if (order.direction) parts.push(order.direction === 'import' ? '(Import)' : '(Export)');
+    if (order.order_date) {
+      const d = new Date(order.order_date + 'T00:00:00');
+      parts.push('— ' + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }));
+    }
+
+    items.push({
+      id: crypto.randomUUID(),
+      description: parts.join(' ') || 'Haulage',
+      quantity: String(completedCount),
+      unit_price: order.rate_per_load ? String(order.rate_per_load) : '',
+    });
+  }
+
+  return items.length > 0 ? items : [{ id: crypto.randomUUID(), description: '', quantity: '1', unit_price: '' }];
 }
 
 export function JobDetailPanel({ job, userId, onBack, onEdit }: JobDetailPanelProps) {
@@ -442,6 +471,7 @@ export function JobDetailPanel({ job, userId, onBack, onEdit }: JobDetailPanelPr
           orgId={job.org_id}
           userId={userId}
           prefillJob={job}
+          prefillItems={buildInvoiceItems(orders, loadsByAssignment)}
           onClose={() => setShowInvoiceModal(false)}
           onSaved={() => setShowInvoiceModal(false)}
         />
