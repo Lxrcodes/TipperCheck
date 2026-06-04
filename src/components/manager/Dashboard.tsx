@@ -32,6 +32,7 @@ import {
   ArrowUpDown,
   Briefcase,
   Receipt,
+  BarChart2,
 } from 'lucide-react';
 import type {
   AuthUser,
@@ -62,8 +63,9 @@ import { PmiRecordModal } from './PmiRecordModal';
 import { JobModal } from './JobModal';
 import { JobDetailPanel } from './JobDetailPanel';
 import { InvoicesView } from './InvoicesView';
+import { AnalyticsView } from './AnalyticsView';
 
-type DashboardTab = 'today' | 'history' | 'jobs' | 'vehicles' | 'team' | 'defects' | 'invoices' | 'settings';
+type DashboardTab = 'today' | 'history' | 'jobs' | 'vehicles' | 'team' | 'defects' | 'invoices' | 'analytics' | 'settings';
 
 interface DashboardProps {
   user: AuthUser;
@@ -312,6 +314,12 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
             locked={!canAccessTier(org, 3)}
           />
           <NavItem
+            icon={BarChart2}
+            label="Analytics"
+            active={activeTab === 'analytics'}
+            onClick={() => handleTabChange('analytics')}
+          />
+          <NavItem
             icon={Settings}
             label="Settings"
             active={activeTab === 'settings'}
@@ -416,6 +424,7 @@ export function Dashboard({ user, org, onLogout, onSwitchToDriver, onOrgReload }
                     features={['Create and send professional invoices', 'Link invoices to jobs', 'Track draft, sent and paid status', 'Shareable public invoice links']}
                   />
             )}
+            {activeTab === 'analytics' && <AnalyticsView org={org} />}
             {activeTab === 'settings' && <SettingsView org={org} user={user} activeVehicleCount={activeVehicles.length} onOrgReload={onOrgReload} />}
           </>
         )}
