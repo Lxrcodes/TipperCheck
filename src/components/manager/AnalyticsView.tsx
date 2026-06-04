@@ -47,6 +47,78 @@ interface DefectRow {
   status: string;
 }
 
+function RevenueLineChart({ data }: { data: { label: string; value: number }[] }) {
+  const W = 500;
+  const H = 140;
+  const PAD = { top: 16, right: 16, bottom: 28, left: 48 };
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
+  const max = Math.max(...data.map((d) => d.value), 1);
+  const n = data.length;
+
+  const px = (i: number) => PAD.left + (i / (n - 1)) * plotW;
+  const py = (v: number) => PAD.top + plotH - (v / max) * plotH;
+
+  const points = data.map((d, i) => ({ x: px(i), y: py(d.value), ...d }));
+  const linePoints = points.map((p) => `${p.x},${p.y}`).join(' ');
+  const areaPoints = [
+    `${PAD.left},${PAD.top + plotH}`,
+    ...points.map((p) => `${p.x},${p.y}`),
+    `${PAD.left + plotW},${PAD.top + plotH}`,
+  ].join(' ');
+
+  const midY = PAD.top + plotH / 2;
+  const yLabels = [
+    { y: PAD.top,        val: max },
+    { y: midY,           val: max / 2 },
+    { y: PAD.top + plotH, val: 0 },
+  ];
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className="w-full"
+      style={{ height: 160 }}
+      aria-label="Revenue line chart"
+    >
+      <defs>
+        <linearGradient id="rev-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stopColor="#f97316" stopOpacity="0.25" />
+          <stop offset="100%" stopColor="#f97316" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      {/* Y axis gridlines + labels */}
+      {yLabels.map(({ y, val }) => (
+        <g key={y}>
+          <line x1={PAD.left} y1={y} x2={PAD.left + plotW} y2={y} stroke="#f1f5f9" strokeWidth="1" />
+          <text x={PAD.left - 6} y={y + 4} textAnchor="end" fontSize="10" fill="#94a3b8">
+            £{val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val.toFixed(0)}
+          </text>
+        </g>
+      ))}
+
+      {/* Area fill */}
+      <polygon points={areaPoints} fill="url(#rev-fill)" />
+
+      {/* Line */}
+      <polyline points={linePoints} fill="none" stroke="#f97316" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+
+      {/* Data points + x labels */}
+      {points.map((p, i) => (
+        <g key={i}>
+          <circle cx={p.x} cy={p.y} r="4" fill="#f97316" stroke="white" strokeWidth="2" />
+          <text x={p.x} y={H - 6} textAnchor="middle" fontSize="10" fill="#94a3b8">
+            {p.label}
+          </text>
+          {/* Value tooltip on hover — show via title */}
+          <title>£{p.value.toFixed(0)}</title>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 function StatCard({ label, value, sub, accent }: {
   label: string;
   value: string | number;
@@ -87,6 +159,7 @@ function LockedSection({ tierName }: { tierName: string }) {
 
 export function AnalyticsView({ org }: AnalyticsViewProps) {
   const [loading, setLoading] = useState(true);
+  const [chartType, setChartType] = useState<'bar' | 'line'>('line');
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [loads, setLoads] = useState<LoadRow[]>([]);
   const [jobs, setJobs] = useState<JobRow[]>([]);
@@ -235,25 +308,46 @@ export function AnalyticsView({ org }: AnalyticsViewProps) {
               <StatCard label="Overdue"     value={`£${overdue.toFixed(0)}`}           accent={overdue > 0 ? 'red' : undefined} />
             </div>
 
-            {/* Revenue bar chart */}
+            {/* Revenue chart */}
             <div className="bg-white rounded-xl border border-slate-200 p-4">
-              <p className="text-xs font-bold text-slate-500 uppercase mb-4">Revenue — last 6 months</p>
-              <div className="space-y-2">
-                {monthlyRevenue.map((m) => (
-                  <div key={m.label} className="flex items-center gap-3">
-                    <span className="text-xs text-slate-500 w-8 shrink-0">{m.label}</span>
-                    <div className="flex-1 h-6 bg-slate-100 rounded overflow-hidden">
-                      <div
-                        className="h-full bg-orange-400 rounded transition-all duration-500"
-                        style={{ width: `${(m.value / maxMonthly) * 100}%` }}
-                      />
-                    </div>
-                    <span className="text-xs font-bold text-slate-700 w-16 text-right shrink-0">
-                      {m.value > 0 ? `£${m.value.toFixed(0)}` : '—'}
-                    </span>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-xs font-bold text-slate-500 uppercase">Revenue — last 6 months</p>
+                <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                  <button
+                    onClick={() => setChartType('line')}
+                    className={`px-3 py-1.5 text-xs font-semibold transition-colors ${chartType === 'line' ? 'bg-orange-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+                  >
+                    Line
+                  </button>
+                  <button
+                    onClick={() => setChartType('bar')}
+                    className={`px-3 py-1.5 text-xs font-semibold transition-colors border-l border-slate-200 ${chartType === 'bar' ? 'bg-orange-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+                  >
+                    Bar
+                  </button>
+                </div>
               </div>
+
+              {chartType === 'bar' ? (
+                <div className="space-y-2">
+                  {monthlyRevenue.map((m) => (
+                    <div key={m.label} className="flex items-center gap-3">
+                      <span className="text-xs text-slate-500 w-8 shrink-0">{m.label}</span>
+                      <div className="flex-1 h-6 bg-slate-100 rounded overflow-hidden">
+                        <div
+                          className="h-full bg-orange-400 rounded transition-all duration-500"
+                          style={{ width: `${(m.value / maxMonthly) * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-bold text-slate-700 w-16 text-right shrink-0">
+                        {m.value > 0 ? `£${m.value.toFixed(0)}` : '—'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <RevenueLineChart data={monthlyRevenue} />
+              )}
             </div>
           </>
         )}
