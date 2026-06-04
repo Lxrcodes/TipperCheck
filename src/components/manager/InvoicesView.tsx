@@ -57,6 +57,12 @@ export function InvoicesView({ org, userId }: InvoicesViewProps) {
   const [copiedNumber, setCopiedNumber] = useState<string | null>(null);
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
   const [sending, setSending] = useState<string | null>(null);
+  const [paymentForm, setPaymentForm] = useState<{
+    invoiceId: string;
+    date: string;
+    method: string;
+    reference: string;
+  } | null>(null);
 
   useEffect(() => { loadInvoices(); }, [org.id]);
 
@@ -101,6 +107,29 @@ export function InvoicesView({ org, userId }: InvoicesViewProps) {
     setInvoices((prev) =>
       prev.map((inv) => (inv.id === invoice.id ? { ...inv, status: newStatus } : inv))
     );
+    setStatusUpdating(null);
+  };
+
+  const handleMarkPaid = async () => {
+    if (!paymentForm) return;
+    setStatusUpdating(paymentForm.invoiceId);
+    await supabase
+      .from('invoices')
+      .update({
+        status:             'paid',
+        paid_at:            paymentForm.date || null,
+        payment_method:     paymentForm.method || null,
+        payment_reference:  paymentForm.reference.trim() || null,
+      })
+      .eq('id', paymentForm.invoiceId);
+    setInvoices((prev) =>
+      prev.map((inv) =>
+        inv.id === paymentForm.invoiceId
+          ? { ...inv, status: 'paid', paid_at: paymentForm.date || null, payment_method: paymentForm.method || null, payment_reference: paymentForm.reference.trim() || null }
+          : inv
+      )
+    );
+    setPaymentForm(null);
     setStatusUpdating(null);
   };
 
@@ -349,7 +378,21 @@ export function InvoicesView({ org, userId }: InvoicesViewProps) {
                       {/* Status transitions — skip 'sent' for drafts with email (handled above) */}
                       {transitions
                         .filter((s) => !(s === 'sent' && inv.client_email))
-                        .map((s) => (
+                        .map((s) => s === 'paid' ? (
+                          <button
+                            key={s}
+                            onClick={() => setPaymentForm({
+                              invoiceId: inv.id,
+                              date: new Date().toISOString().split('T')[0],
+                              method: 'bacs',
+                              reference: '',
+                            })}
+                            disabled={statusUpdating === inv.id}
+                            className="px-3 py-1.5 text-xs font-bold bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
+                          >
+                            Mark Paid
+                          </button>
+                        ) : (
                           <button
                             key={s}
                             onClick={() => handleStatusChange(inv, s)}
@@ -413,6 +456,69 @@ export function InvoicesView({ org, userId }: InvoicesViewProps) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Payment details modal */}
+      {paymentForm && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+            <div className="px-5 py-4 border-b border-slate-200">
+              <h2 className="text-base font-bold text-slate-900">Record Payment</h2>
+              <p className="text-xs text-slate-500 mt-0.5">All fields are optional</p>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Date Received</label>
+                <input
+                  type="date"
+                  value={paymentForm.date}
+                  onChange={(e) => setPaymentForm((f) => f && { ...f, date: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Payment Method</label>
+                <select
+                  value={paymentForm.method}
+                  onChange={(e) => setPaymentForm((f) => f && { ...f, method: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                >
+                  <option value="bacs">BACS Bank Transfer</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Reference</label>
+                <input
+                  type="text"
+                  value={paymentForm.reference}
+                  onChange={(e) => setPaymentForm((f) => f && { ...f, reference: e.target.value })}
+                  placeholder="e.g. bank ref, cheque number"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 px-5 py-4 border-t border-slate-200">
+              <button
+                onClick={() => setPaymentForm(null)}
+                className="flex-1 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMarkPaid}
+                disabled={statusUpdating === paymentForm.invoiceId}
+                className="flex-1 py-2.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 text-sm font-bold flex items-center justify-center gap-2"
+              >
+                {statusUpdating === paymentForm.invoiceId && <Loader2 className="w-4 h-4 animate-spin" />}
+                Confirm Paid
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

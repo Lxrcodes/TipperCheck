@@ -334,6 +334,9 @@ export interface Invoice {
   total_gross: number;
   notes: string | null;
   status: InvoiceStatus;
+  paid_at: string | null;
+  payment_method: string | null;
+  payment_reference: string | null;
   stripe_checkout_session_id: string | null;
   created_at: string;
   updated_at: string;
