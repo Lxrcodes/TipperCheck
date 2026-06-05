@@ -74,28 +74,78 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
   const [newVehicleNextPmi, setNewVehicleNextPmi] = useState('');
   const [newVehiclePmiInterval, setNewVehiclePmiInterval] = useState(6);
 
-  // Handle return from Stripe checkout
+  // On mount: handle Stripe return params OR resume mid-onboarding from DB
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const billingStatus = params.get('billing');
-    const orgIdParam = params.get('org_id');
+    const init = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const billingStatus = params.get('billing');
+      const orgIdParam = params.get('org_id');
 
-    if (billingStatus === 'success' && orgIdParam) {
-      // Clear URL params
-      window.history.replaceState({}, '', window.location.pathname);
-      // Verify payment and complete onboarding
-      verifyPaymentAndComplete(orgIdParam);
-    } else if (billingStatus === 'cancelled') {
-      // Clear URL params
-      window.history.replaceState({}, '', window.location.pathname);
-      setError('Payment was cancelled. Please try again to complete your subscription.');
-      setStep('payment');
-      // Try to get org ID from localStorage
-      const storedOrgId = localStorage.getItem('pending_org_id');
-      if (storedOrgId) {
-        setCreatedOrgId(storedOrgId);
+      if (billingStatus === 'success' && orgIdParam) {
+        window.history.replaceState({}, '', window.location.pathname);
+        verifyPaymentAndComplete(orgIdParam);
+        return;
       }
-    }
+
+      if (billingStatus === 'cancelled') {
+        window.history.replaceState({}, '', window.location.pathname);
+        setError('Payment was cancelled. Please try again to complete your subscription.');
+        setStep('payment');
+        const storedOrgId = localStorage.getItem('pending_org_id');
+        if (storedOrgId) setCreatedOrgId(storedOrgId);
+        return;
+      }
+
+      // Resume mid-onboarding if we have a stored org ID
+      const storedOrgId = localStorage.getItem('pending_org_id');
+      if (!storedOrgId) return;
+
+      try {
+        const { data: orgData } = await supabase
+          .from('organisations')
+          .select('onboarding_step')
+          .eq('id', storedOrgId)
+          .single();
+
+        if (!orgData?.onboarding_step) return;
+
+        setCreatedOrgId(storedOrgId);
+
+        // Restore first vehicle details for display + demo check
+        const { data: firstVehicle } = await supabase
+          .from('vehicles')
+          .select('registration, vehicle_type')
+          .eq('org_id', storedOrgId)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .single();
+
+        if (firstVehicle) {
+          setVehicleReg(firstVehicle.registration);
+          setVehicleType(firstVehicle.vehicle_type as VehicleType);
+        }
+
+        // Restore user name for demo check driver label
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser) {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('id, name')
+            .eq('auth_user_id', authUser.id)
+            .single();
+          if (userData) {
+            setCreatedUserId(userData.id);
+            setUserName(userData.name);
+          }
+        }
+
+        setStep(orgData.onboarding_step as OnboardingStep);
+      } catch (err) {
+        console.error('Failed to resume onboarding:', err);
+      }
+    };
+
+    init();
   }, []);
 
   // Verify payment status and complete onboarding
@@ -255,6 +305,9 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
       // Store org ID for recovery
       localStorage.setItem('pending_org_id', orgId);
 
+      // Persist step so a page reload can resume here
+      await supabase.from('organisations').update({ onboarding_step: 'first_check' }).eq('id', orgId);
+
       // Proceed to first check
       setStep('first_check');
     } catch (err: unknown) {
@@ -269,6 +322,9 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
   // Handle first check completion
   const handleFirstCheckComplete = (status: CheckStatus) => {
     console.log('First check completed with status:', status);
+    if (createdOrgId) {
+      supabase.from('organisations').update({ onboarding_step: 'add_vehicles' }).eq('id', createdOrgId);
+    }
     setStep('add_vehicles');
   };
 
@@ -809,7 +865,12 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
 
           {/* Continue to plan selection */}
           <button
-            onClick={() => setStep('tier')}
+            onClick={() => {
+              if (createdOrgId) {
+                supabase.from('organisations').update({ onboarding_step: 'tier' }).eq('id', createdOrgId);
+              }
+              setStep('tier');
+            }}
             className="w-full py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors flex items-center justify-center gap-2"
           >
             <ChevronRight className="w-5 h-5" />

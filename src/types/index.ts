@@ -77,6 +77,7 @@ export interface Organisation {
   active_vehicle_count: number;
   next_job_seq: number;
   is_demo: boolean;
+  onboarding_step: string | null;
   created_at: string;
   updated_at: string;
 }

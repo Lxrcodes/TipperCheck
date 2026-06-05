@@ -220,6 +220,12 @@ function AppContent() {
             setView('loading');
             return;
           }
+          // If mid-onboarding (camera reload etc.) send back to onboarding to resume
+          const midOnboardingSteps = ['first_check', 'add_vehicles', 'tier'];
+          if (orgData.onboarding_step && midOnboardingSteps.includes(orgData.onboarding_step)) {
+            setView('onboarding');
+            return;
+          }
           // Has vehicles but no subscription - needs to complete payment
           setOrg(orgData);
           setAuthUser({
