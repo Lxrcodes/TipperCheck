@@ -220,9 +220,15 @@ function AppContent() {
             setView('loading');
             return;
           }
-          // If mid-onboarding (camera reload etc.) send back to onboarding to resume
+          // If mid-onboarding (camera reload etc.) send back to onboarding to resume.
+          // DB onboarding_step is authoritative; localStorage pending_org_id is a fallback
+          // for the same device in case the DB column doesn't have a value yet.
           const midOnboardingSteps = ['first_check', 'add_vehicles', 'tier'];
-          if (orgData.onboarding_step && midOnboardingSteps.includes(orgData.onboarding_step)) {
+          const storedPendingOrg = localStorage.getItem('pending_org_id');
+          const isMidOnboarding =
+            (orgData.onboarding_step && midOnboardingSteps.includes(orgData.onboarding_step)) ||
+            storedPendingOrg === orgData.id;
+          if (isMidOnboarding) {
             setView('onboarding');
             return;
           }
