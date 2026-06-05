@@ -96,50 +96,54 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
         return;
       }
 
-      // Resume mid-onboarding if we have a stored org ID
-      const storedOrgId = localStorage.getItem('pending_org_id');
-      if (!storedOrgId) return;
-
+      // Check if this auth user already has a record in DB (got through vehicle step).
+      // Works across devices and browsers — doesn't rely on localStorage.
       try {
-        const { data: orgData } = await supabase
-          .from('organisations')
-          .select('onboarding_step')
-          .eq('id', storedOrgId)
-          .single();
-
-        if (!orgData?.onboarding_step) return;
-
-        setCreatedOrgId(storedOrgId);
-
-        // Restore first vehicle details for display + demo check
-        const { data: firstVehicle } = await supabase
-          .from('vehicles')
-          .select('registration, vehicle_type')
-          .eq('org_id', storedOrgId)
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .single();
-
-        if (firstVehicle) {
-          setVehicleReg(firstVehicle.registration);
-          setVehicleType(firstVehicle.vehicle_type as VehicleType);
-        }
-
-        // Restore user name for demo check driver label
         const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (authUser) {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('id, name')
-            .eq('auth_user_id', authUser.id)
-            .single();
-          if (userData) {
-            setCreatedUserId(userData.id);
-            setUserName(userData.name);
-          }
+        if (!authUser) return;
+
+        const { data: userData } = await supabase
+          .from('users')
+          .select('id, name, org_id')
+          .eq('auth_user_id', authUser.id)
+          .single();
+
+        if (!userData) return; // No DB record — genuinely fresh start
+
+        // User record exists, so they at least completed the vehicle step.
+        setCreatedOrgId(userData.org_id);
+        setCreatedUserId(userData.id);
+        setUserName(userData.name);
+        localStorage.setItem('pending_org_id', userData.org_id);
+
+        const [orgResult, vehicleResult] = await Promise.all([
+          supabase
+            .from('organisations')
+            .select('onboarding_step')
+            .eq('id', userData.org_id)
+            .single(),
+          supabase
+            .from('vehicles')
+            .select('registration, vehicle_type')
+            .eq('org_id', userData.org_id)
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .single(),
+        ]);
+
+        if (vehicleResult.data) {
+          setVehicleReg(vehicleResult.data.registration);
+          setVehicleType(vehicleResult.data.vehicle_type as VehicleType);
         }
 
-        setStep(orgData.onboarding_step as OnboardingStep);
+        // Resume from saved step; default to tier selection if nothing was saved
+        const savedStep = orgResult.data?.onboarding_step as OnboardingStep | null;
+        const resumeStep: OnboardingStep =
+          savedStep && ['first_check', 'add_vehicles', 'tier'].includes(savedStep)
+            ? savedStep
+            : 'tier';
+
+        setStep(resumeStep);
       } catch (err) {
         console.error('Failed to resume onboarding:', err);
       }

@@ -220,31 +220,10 @@ function AppContent() {
             setView('loading');
             return;
           }
-          // If mid-onboarding (camera reload etc.) send back to onboarding to resume.
-          // DB onboarding_step is authoritative; localStorage pending_org_id is a fallback
-          // for the same device in case the DB column doesn't have a value yet.
-          const midOnboardingSteps = ['first_check', 'add_vehicles', 'tier'];
-          const storedPendingOrg = localStorage.getItem('pending_org_id');
-          const isMidOnboarding =
-            (orgData.onboarding_step && midOnboardingSteps.includes(orgData.onboarding_step)) ||
-            storedPendingOrg === orgData.id;
-          if (isMidOnboarding) {
-            setView('onboarding');
-            return;
-          }
-          // Has vehicles but no subscription - needs to complete payment
-          setOrg(orgData);
-          setAuthUser({
-            id: user.id,
-            auth_user_id: supabaseUser.id,
-            org_id: user.org_id,
-            email: user.email,
-            name: user.name,
-            roles: user.roles,
-            is_billing_admin: user.is_billing_admin,
-            is_active: user.is_active,
-          });
-          setView('payment_required');
+          // Always resume via Onboarding — it queries the DB and resumes from the
+          // correct step (or tier selection if step unknown). This covers camera
+          // reloads, closed tabs, cross-device logins, and cancelled Stripe flows.
+          setView('onboarding');
           return;
         }
       }
