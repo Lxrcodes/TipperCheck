@@ -677,7 +677,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
               <p className="text-xs font-bold text-slate-400 uppercase mb-3">
                 MOT & PMI <span className="text-slate-600 normal-case font-normal">(optional — can be set later)</span>
               </p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-400 uppercase">MOT Due Date</label>
                   <input
@@ -806,7 +806,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
                     </option>
                   ))}
                 </select>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <input
                     type="text"
                     value={newVehicleMake}
