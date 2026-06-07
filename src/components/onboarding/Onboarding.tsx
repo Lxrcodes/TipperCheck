@@ -678,22 +678,22 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
                 MOT & PMI <span className="text-slate-600 normal-case font-normal">(optional — can be set later)</span>
               </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <label className="text-xs font-bold text-slate-400 uppercase">MOT Due Date</label>
                   <input
                     type="date"
                     value={vehicleMotDue}
                     onChange={(e) => setVehicleMotDue(e.target.value)}
-                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                    className="w-full max-w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                   />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <label className="text-xs font-bold text-slate-400 uppercase">Next PMI Due</label>
                   <input
                     type="date"
                     value={vehicleNextPmi}
                     onChange={(e) => setVehicleNextPmi(e.target.value)}
-                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                    className="w-full max-w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                   />
                 </div>
               </div>
@@ -821,22 +821,22 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
                     className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                     placeholder="Model (optional)"
                   />
-                  <div>
+                  <div className="min-w-0">
                     <label className="block text-xs font-bold text-slate-400 uppercase mb-1">MOT Due Date</label>
                     <input
                       type="date"
                       value={newVehicleMotDue}
                       onChange={(e) => setNewVehicleMotDue(e.target.value)}
-                      className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                      className="w-full max-w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                     />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Next PMI Due</label>
                     <input
                       type="date"
                       value={newVehicleNextPmi}
                       onChange={(e) => setNewVehicleNextPmi(e.target.value)}
-                      className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                      className="w-full max-w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                     />
                   </div>
                 </div>
