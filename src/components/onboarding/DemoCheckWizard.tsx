@@ -35,6 +35,8 @@ interface DemoCheckWizardProps {
 type WizardStep = 'intro' | 'reg_photo' | 'category' | 'notes' | 'confirmations' | 'summary' | 'signature' | 'complete';
 
 export function DemoCheckWizard({ vehicleReg, vehicleType, driverName, onComplete }: DemoCheckWizardProps) {
+  const SAVE_KEY = `demo_check_${vehicleReg}`;
+
   const [step, setStep] = useState<WizardStep>('intro');
   const [currentCategoryIndex, setCurrentCategoryIndex] = useState(0);
   const [results, setResults] = useState<Map<string, DemoItemResult>>(new Map());
@@ -60,6 +62,69 @@ export function DemoCheckWizard({ vehicleReg, vehicleType, driverName, onComplet
   const currentCategory = template.categories[currentCategoryIndex];
   const totalCategories = template.categories.length;
   const progress = ((currentCategoryIndex + 1) / totalCategories) * 100;
+
+  // Restore saved progress on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(SAVE_KEY);
+    if (!saved) return;
+    try {
+      const s = JSON.parse(saved);
+      if (!s.step || s.step === 'intro' || s.step === 'complete') return;
+      setStep(s.step);
+      setCurrentCategoryIndex(s.currentCategoryIndex ?? 0);
+      setResults(new Map(s.results ?? []));
+      if (s.startedAt) setStartedAt(new Date(s.startedAt));
+      setVehicleFitConfirmed(s.vehicleFitConfirmed ?? false);
+      setDriverFitConfirmed(s.driverFitConfirmed ?? false);
+      setDefectRepairNotes(s.defectRepairNotes ?? '');
+      setHeadOfficeNotes(s.headOfficeNotes ?? '');
+      if (s.regPhoto) setRegPhoto(s.regPhoto);
+      if (s.signature) setSignature(s.signature);
+    } catch {
+      localStorage.removeItem(SAVE_KEY);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Save progress whenever state changes
+  useEffect(() => {
+    if (step === 'intro') return;
+    if (step === 'complete') {
+      localStorage.removeItem(SAVE_KEY);
+      return;
+    }
+    const state = {
+      step,
+      currentCategoryIndex,
+      results: Array.from(results.entries()),
+      startedAt: startedAt?.toISOString() ?? null,
+      vehicleFitConfirmed,
+      driverFitConfirmed,
+      defectRepairNotes,
+      headOfficeNotes,
+      signature,
+    };
+    // Try with photo first; fall back without if storage is full
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify({ ...state, regPhoto }));
+    } catch {
+      try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+      } catch { /* storage unavailable */ }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, currentCategoryIndex, results, startedAt, vehicleFitConfirmed, driverFitConfirmed, defectRepairNotes, headOfficeNotes, regPhoto, signature]);
+
+  // Restore signature onto canvas when returning to signature step
+  useEffect(() => {
+    if (step !== 'signature' || !signature || !signatureCanvasRef.current) return;
+    const canvas = signatureCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const img = new Image();
+    img.onload = () => ctx.drawImage(img, 0, 0);
+    img.src = signature;
+  }, [step, signature]);
 
   // Timer effect
   useEffect(() => {
