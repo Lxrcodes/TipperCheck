@@ -78,6 +78,7 @@ export interface Organisation {
   next_job_seq: number;
   is_demo: boolean;
   onboarding_step: string | null;
+  trial_started_at: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -390,7 +390,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
     }
   };
 
-  // Proceed to payment with selected tier
+  // Start free trial — no card required
   const handleProceedToPayment = async () => {
     if (!createdOrgId) return;
 
@@ -398,17 +398,22 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
     setError(null);
 
     try {
-      const checkoutUrl = await createCheckoutSession(createdOrgId, selectedTier);
+      const { error: trialError } = await supabase
+        .from('organisations')
+        .update({
+          trial_started_at: new Date().toISOString(),
+          subscription_tier: selectedTier,
+          onboarding_step: null,
+        })
+        .eq('id', createdOrgId);
 
-      if (checkoutUrl) {
-        window.location.href = checkoutUrl;
-      } else {
-        setError('Failed to create checkout session. Please try again.');
-        setStep('payment');
-      }
+      if (trialError) throw trialError;
+
+      localStorage.removeItem('pending_org_id');
+      setStep('complete');
+      setTimeout(() => onComplete(), 1500);
     } catch (err) {
-      setError('Failed to start payment. Please try again.');
-      setStep('payment');
+      setError('Failed to start trial. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -960,13 +965,13 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
               <>
-                <CreditCard className="w-5 h-5" />
+                <Check className="w-5 h-5" />
                 Start Free Trial — {TIER_NAMES[selectedTier]}
               </>
             )}
           </button>
           <p className="text-center text-slate-500 text-xs mt-3">
-            Card details required — no charge for 7 days
+            No card required — 7 days free, then from 70p per vehicle per week
           </p>
         </div>
       </div>

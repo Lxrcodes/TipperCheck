@@ -215,16 +215,44 @@ function AppContent() {
           .eq('status', 'active');
 
         if (vehicleCount && vehicleCount > 0) {
-          // If we just returned from Stripe, keep showing loading until polling confirms status
           if (awaitingBillingRef.current) {
             setView('loading');
             return;
           }
-          // Always resume via Onboarding — it queries the DB and resumes from the
-          // correct step (or tier selection if step unknown). This covers camera
-          // reloads, closed tabs, cross-device logins, and cancelled Stripe flows.
-          setView('onboarding');
-          return;
+
+          // Mid-onboarding (haven't chosen a tier yet)
+          const midOnboardingSteps = ['first_check', 'add_vehicles', 'tier'];
+          if (orgData.onboarding_step && midOnboardingSteps.includes(orgData.onboarding_step)) {
+            setView('onboarding');
+            return;
+          }
+
+          // Free trial — check if still within 7 days
+          if (orgData.trial_started_at) {
+            const trialEnd = new Date(new Date(orgData.trial_started_at).getTime() + 7 * 24 * 60 * 60 * 1000);
+            if (new Date() <= trialEnd) {
+              // Trial still active — fall through to normal access below
+            } else {
+              // Trial expired
+              setOrg(orgData);
+              setAuthUser({
+                id: user.id,
+                auth_user_id: supabaseUser.id,
+                org_id: user.org_id,
+                email: user.email,
+                name: user.name,
+                roles: user.roles,
+                is_billing_admin: user.is_billing_admin,
+                is_active: user.is_active,
+              });
+              setView('payment_required');
+              return;
+            }
+          } else {
+            // No trial started, no subscription — still mid-onboarding
+            setView('onboarding');
+            return;
+          }
         }
       }
 
@@ -399,7 +427,7 @@ function AppContent() {
           setPaymentLoading(true);
           setPaymentError(null);
           try {
-            const checkoutUrl = await createCheckoutSession(org.id);
+            const checkoutUrl = await createCheckoutSession(org.id, org.subscription_tier || 1);
             if (checkoutUrl) {
               window.location.href = checkoutUrl;
             } else {
@@ -803,13 +831,27 @@ function PaymentRequired({
         <div className="inline-flex items-center justify-center w-20 h-20 bg-orange-500/10 rounded-full mb-6">
           <CreditCard className="w-10 h-10 text-orange-500" />
         </div>
-        <h1 className="text-2xl font-heading text-white mb-2">Complete Your Subscription</h1>
-        <p className="text-slate-400 mb-2">
-          Welcome back, <span className="text-white font-medium">{org.name}</span>
-        </p>
-        <p className="text-slate-400 mb-6">
-          Please complete your payment to start using CheckaTruck.
-        </p>
+        {org.trial_started_at ? (
+          <>
+            <h1 className="text-2xl font-heading text-white mb-2">Your Free Trial Has Ended</h1>
+            <p className="text-slate-400 mb-2">
+              <span className="text-white font-medium">{org.name}</span>
+            </p>
+            <p className="text-slate-400 mb-6">
+              Subscribe now to keep your fleet compliant and pick up right where you left off.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="text-2xl font-heading text-white mb-2">Complete Your Subscription</h1>
+            <p className="text-slate-400 mb-2">
+              Welcome back, <span className="text-white font-medium">{org.name}</span>
+            </p>
+            <p className="text-slate-400 mb-6">
+              Please complete your payment to start using CheckaTruck.
+            </p>
+          </>
+        )}
 
         {error && (
           <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg mb-6">
