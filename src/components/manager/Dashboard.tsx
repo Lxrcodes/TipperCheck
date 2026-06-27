@@ -2594,7 +2594,7 @@ function SettingsView({ org, user, activeVehicleCount, onOrgReload }: SettingsVi
     setBillingLoading(true);
     try {
       const { createCheckoutSession } = await import('@/services/stripeClient');
-      const url = await createCheckoutSession(org.id);
+      const url = await createCheckoutSession(org.id, org.subscription_tier || 1, org.billing_interval ?? 'year');
       if (url) {
         window.location.href = url;
       }

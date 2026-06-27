@@ -427,7 +427,7 @@ function AppContent() {
           setPaymentLoading(true);
           setPaymentError(null);
           try {
-            const checkoutUrl = await createCheckoutSession(org.id, org.subscription_tier || 1);
+            const checkoutUrl = await createCheckoutSession(org.id, org.subscription_tier || 1, org.billing_interval ?? 'year');
             if (checkoutUrl) {
               window.location.href = checkoutUrl;
             } else {
@@ -465,7 +465,7 @@ function AppContent() {
         onResubscribe={async () => {
           setPaymentLoading(true);
           try {
-            const checkoutUrl = await createCheckoutSession(org.id);
+            const checkoutUrl = await createCheckoutSession(org.id, org.subscription_tier || 1, org.billing_interval ?? 'year');
             if (checkoutUrl) {
               window.location.href = checkoutUrl;
             }

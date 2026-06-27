@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/services/supabaseClient';
-import { createCheckoutSession, TIER_NAMES, TIER_FEATURES, getWeeklyRateForTier, getAnnualTotalForTier } from '@/services/stripeClient';
+import { createCheckoutSession, TIER_NAMES, TIER_FEATURES, getWeeklyRateForTier, getAnnualTotalForTier, getMonthlyRateForTier } from '@/services/stripeClient';
 import {
   Truck,
   Users,
@@ -45,6 +45,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
   const [error, setError] = useState<string | null>(null);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
   const [selectedTier, setSelectedTier] = useState<number>(1);
+  const [billingInterval, setBillingInterval] = useState<'year' | 'month'>('year');
 
   // Created IDs (after org/user/vehicle creation)
   const [createdOrgId, setCreatedOrgId] = useState<string | null>(null);
@@ -209,7 +210,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
     setError(null);
 
     try {
-      const checkoutUrl = await createCheckoutSession(createdOrgId, selectedTier);
+      const checkoutUrl = await createCheckoutSession(createdOrgId, selectedTier, billingInterval);
 
       if (checkoutUrl) {
         window.location.href = checkoutUrl;
@@ -403,6 +404,7 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
         .update({
           trial_started_at: new Date().toISOString(),
           subscription_tier: selectedTier,
+          billing_interval: billingInterval,
           onboarding_step: null,
         })
         .eq('id', createdOrgId);
@@ -915,11 +917,39 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
             <p className="text-slate-400 mt-1">All plans include a 7-day free trial</p>
           </div>
 
+          <div className="flex items-center justify-center mb-5">
+            <div className="inline-flex bg-slate-800 rounded-lg p-1">
+              <button
+                onClick={() => setBillingInterval('year')}
+                className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${
+                  billingInterval === 'year'
+                    ? 'bg-orange-500 text-white'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Annual
+                <span className="ml-1.5 text-xs font-normal opacity-80">Save ~17%</span>
+              </button>
+              <button
+                onClick={() => setBillingInterval('month')}
+                className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${
+                  billingInterval === 'month'
+                    ? 'bg-orange-500 text-white'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Monthly
+              </button>
+            </div>
+          </div>
+
           <div className="space-y-3 mb-6">
             {tiers.map((tier) => {
               const weekly = getWeeklyRateForTier(tier, totalVehicles);
               const annual = getAnnualTotalForTier(tier, totalVehicles);
               const annualVat = annual * 0.20;
+              const monthly = getMonthlyRateForTier(tier);
+              const monthlyVat = monthly * totalVehicles * 0.20;
               const isSelected = selectedTier === tier;
               return (
                 <button
@@ -939,8 +969,17 @@ export function Onboarding({ email, onComplete, onBack }: OnboardingProps) {
                       )}
                     </div>
                     <div className="text-right">
-                      <div className="text-white font-bold">£{weekly.toFixed(2)}<span className="text-slate-400 text-xs font-normal">/vehicle/week</span></div>
-                      <div className="text-slate-400 text-xs">£{(annual + annualVat).toFixed(2)}/year inc. VAT for {totalVehicles} vehicle{totalVehicles !== 1 ? 's' : ''}</div>
+                      {billingInterval === 'year' ? (
+                        <>
+                          <div className="text-white font-bold">£{weekly.toFixed(2)}<span className="text-slate-400 text-xs font-normal">/vehicle/week</span></div>
+                          <div className="text-slate-400 text-xs">£{(annual + annualVat).toFixed(2)}/year inc. VAT for {totalVehicles} vehicle{totalVehicles !== 1 ? 's' : ''}</div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-white font-bold">£{monthly.toFixed(2)}<span className="text-slate-400 text-xs font-normal">/vehicle/month</span></div>
+                          <div className="text-slate-400 text-xs">£{(monthly * totalVehicles + monthlyVat).toFixed(2)}/month inc. VAT for {totalVehicles} vehicle{totalVehicles !== 1 ? 's' : ''}</div>
+                        </>
+                      )}
                     </div>
                   </div>
                   <ul className="space-y-1">

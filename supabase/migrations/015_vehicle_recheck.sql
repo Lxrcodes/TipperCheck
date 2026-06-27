@@ -8,3 +8,5 @@
 
 ALTER TABLE vehicles
   ADD COLUMN IF NOT EXISTS requires_recheck boolean NOT NULL DEFAULT false;
+
+

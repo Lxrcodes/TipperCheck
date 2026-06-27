@@ -17,10 +17,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const TIER_PRICE_ENV: Record<number, string> = {
-  1: 'STRIPE_PRICE_T1',
-  2: 'STRIPE_PRICE_T2',
-  3: 'STRIPE_PRICE_T3',
+const TIER_PRICE_ENV: Record<string, Record<number, string>> = {
+  year: { 1: 'STRIPE_PRICE_T1', 2: 'STRIPE_PRICE_T2', 3: 'STRIPE_PRICE_T3' },
+  month: { 1: 'STRIPE_PRICE_T1_MONTHLY', 2: 'STRIPE_PRICE_T2_MONTHLY', 3: 'STRIPE_PRICE_T3_MONTHLY' },
 };
 
 serve(async (req) => {
@@ -29,7 +28,7 @@ serve(async (req) => {
   }
 
   try {
-    const { orgId, tier = 1 } = await req.json();
+    const { orgId, tier = 1, billingInterval = 'year' } = await req.json();
 
     if (!orgId) {
       return new Response(
@@ -39,7 +38,8 @@ serve(async (req) => {
     }
 
     const selectedTier = [1, 2, 3].includes(tier) ? tier : 1;
-    const priceEnvKey = TIER_PRICE_ENV[selectedTier];
+    const interval = billingInterval === 'month' ? 'month' : 'year';
+    const priceEnvKey = TIER_PRICE_ENV[interval][selectedTier];
     const priceId = Deno.env.get(priceEnvKey);
 
     if (!priceId) {
@@ -101,7 +101,7 @@ serve(async (req) => {
       cancel_url: `${(Deno.env.get('APP_URL') ?? '').replace(/\/$/, '')}/`,
       subscription_data: {
         trial_period_days: 7,
-        metadata: { org_id: orgId, tier: String(selectedTier) },
+        metadata: { org_id: orgId, tier: String(selectedTier), billing_interval: interval },
       },
     });
 

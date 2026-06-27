@@ -16,10 +16,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const TIER_PRICE_ENV: Record<number, string> = {
-  1: 'STRIPE_PRICE_T1',
-  2: 'STRIPE_PRICE_T2',
-  3: 'STRIPE_PRICE_T3',
+const TIER_PRICE_ENV: Record<string, Record<number, string>> = {
+  year: { 1: 'STRIPE_PRICE_T1', 2: 'STRIPE_PRICE_T2', 3: 'STRIPE_PRICE_T3' },
+  month: { 1: 'STRIPE_PRICE_T1_MONTHLY', 2: 'STRIPE_PRICE_T2_MONTHLY', 3: 'STRIPE_PRICE_T3_MONTHLY' },
 };
 
 serve(async (req) => {
@@ -44,18 +43,10 @@ serve(async (req) => {
       );
     }
 
-    const newPriceId = Deno.env.get(TIER_PRICE_ENV[newTier]);
-    if (!newPriceId) {
-      return new Response(
-        JSON.stringify({ error: `Stripe price not configured for tier ${newTier}` }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const { data: org, error: orgError } = await supabase
       .from('organisations')
-      .select('subscription_id, subscription_tier')
+      .select('subscription_id, subscription_tier, billing_interval')
       .eq('id', orgId)
       .single();
 
@@ -70,6 +61,15 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: 'Already on this tier' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const interval = org.billing_interval === 'month' ? 'month' : 'year';
+    const newPriceId = Deno.env.get(TIER_PRICE_ENV[interval][newTier]);
+    if (!newPriceId) {
+      return new Response(
+        JSON.stringify({ error: `Stripe price not configured for tier ${newTier}` }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

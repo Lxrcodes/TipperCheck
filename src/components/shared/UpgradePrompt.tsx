@@ -1,5 +1,5 @@
 import { Lock, ChevronRight } from 'lucide-react';
-import { TIER_NAMES, TIER_FEATURES, getWeeklyRateForTier } from '@/services/stripeClient';
+import { TIER_NAMES, TIER_FEATURES, getWeeklyRateForTier, getMonthlyRateForTier } from '@/services/stripeClient';
 import type { Organisation } from '@/types';
 
 interface UpgradePromptProps {
@@ -11,7 +11,9 @@ interface UpgradePromptProps {
 export function UpgradePrompt({ org, requiredTier, onUpgrade }: UpgradePromptProps) {
   const currentTier = org.subscription_tier ?? 1;
   const vehicleCount = org.active_vehicle_count || 1;
+  const isMonthly = org.billing_interval === 'month';
   const weeklyRate = getWeeklyRateForTier(requiredTier, vehicleCount);
+  const monthlyRate = getMonthlyRateForTier(requiredTier);
   const tierName = TIER_NAMES[requiredTier];
   const features = TIER_FEATURES[requiredTier] ?? [];
 
@@ -43,9 +45,19 @@ export function UpgradePrompt({ org, requiredTier, onUpgrade }: UpgradePromptPro
         </div>
 
         <div className="mb-6">
-          <span className="text-3xl font-bold text-slate-900">£{weeklyRate.toFixed(2)}</span>
-          <span className="text-slate-500 text-sm"> /vehicle/week + VAT</span>
-          <p className="text-xs text-slate-400 mt-1">Billed annually — charged immediately, prorated from today</p>
+          {isMonthly ? (
+            <>
+              <span className="text-3xl font-bold text-slate-900">£{monthlyRate.toFixed(2)}</span>
+              <span className="text-slate-500 text-sm"> /vehicle/month + VAT</span>
+              <p className="text-xs text-slate-400 mt-1">Billed monthly — charged immediately, prorated from today</p>
+            </>
+          ) : (
+            <>
+              <span className="text-3xl font-bold text-slate-900">£{weeklyRate.toFixed(2)}</span>
+              <span className="text-slate-500 text-sm"> /vehicle/week + VAT</span>
+              <p className="text-xs text-slate-400 mt-1">Billed annually — charged immediately, prorated from today</p>
+            </>
+          )}
         </div>
 
         {onUpgrade && (

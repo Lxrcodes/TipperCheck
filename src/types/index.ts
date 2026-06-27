@@ -72,6 +72,7 @@ export interface Organisation {
   subscription_status: SubscriptionStatus | null;
   subscription_tier: number;
   stripe_price_id: string | null;
+  billing_interval: 'month' | 'year';
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   active_vehicle_count: number;

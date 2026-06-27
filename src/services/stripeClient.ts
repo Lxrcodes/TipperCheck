@@ -37,6 +37,17 @@ export const TIER_WEEKLY_RATES: Record<number, number[]> = {
   3: [2.50, 2.25, 2.13, 2.00],
 };
 
+// Monthly per-vehicle rates per tier (pence). No volume bands — flat rate.
+export const TIER_MONTHLY_RATES: Record<number, number> = {
+  1: 3.55,
+  2: 7.65,
+  3: 12.70,
+};
+
+export function getMonthlyRateForTier(tier: number): number {
+  return TIER_MONTHLY_RATES[tier] ?? TIER_MONTHLY_RATES[1];
+}
+
 export const TIER_FEATURES: Record<number, string[]> = {
   1: ['DVSA-compliant daily checks', 'Defect management', 'Audit trail', 'Manager dashboard'],
   2: ['Everything in Comply', 'Job management', 'MOT & service date tracking', 'Compliance notifications'],
@@ -76,10 +87,10 @@ interface PortalResponse {
 /**
  * Create a Stripe Checkout session for initial subscription
  */
-export async function createCheckoutSession(orgId: string, tier = 1): Promise<string | null> {
+export async function createCheckoutSession(orgId: string, tier = 1, billingInterval: 'year' | 'month' = 'year'): Promise<string | null> {
   try {
     const { data, error } = await supabase.functions.invoke<CheckoutResponse>('create-checkout', {
-      body: { orgId, tier },
+      body: { orgId, tier, billingInterval },
     });
 
     if (error) {

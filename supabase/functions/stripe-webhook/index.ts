@@ -48,6 +48,7 @@ serve(async (req) => {
           if (orgId) {
             const tier = parseInt(subscription.metadata?.tier ?? '1', 10);
             const priceId = subscription.items.data[0]?.price?.id ?? null;
+            const billingInterval = subscription.metadata?.billing_interval === 'month' ? 'month' : 'year';
 
             await supabase
               .from('organisations')
@@ -56,6 +57,7 @@ serve(async (req) => {
                 subscription_status: subscription.status,
                 subscription_tier: tier,
                 stripe_price_id: priceId,
+                billing_interval: billingInterval,
                 cancel_at_period_end: subscription.cancel_at_period_end,
                 current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
               })
@@ -76,6 +78,7 @@ serve(async (req) => {
         if (orgId) {
           const tier = parseInt(subscription.metadata?.tier ?? '1', 10);
           const priceId = subscription.items.data[0]?.price?.id ?? null;
+          const billingInterval = subscription.metadata?.billing_interval === 'month' ? 'month' : 'year';
 
           await supabase
             .from('organisations')
@@ -83,6 +86,7 @@ serve(async (req) => {
               subscription_status: subscription.status as string,
               subscription_tier: tier,
               stripe_price_id: priceId,
+              billing_interval: billingInterval,
               cancel_at_period_end: subscription.cancel_at_period_end,
               current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
             })
